@@ -103,6 +103,456 @@
                 <div class="form-group">
                     <label>選擇日期區間 (若是單日，右邊不填即可)</label>
                     <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="date" id="dateStart" required onchange="handleDateStartChange()">
+                        <span style="font-weight: bold; color: #6b7280;">~</span>
+                        <input type="date" id="dateEnd" onchange="handleDateEndChange()">
+                    </div>
+                    <input type="hidden" id="reportWeek">
+                    <input type="hidden" id="reportMonth">
+                </div>
+                <div class="form-group">
+                    <label>填寫人員</label>
+                    <input type="text" id="reporter" readonly style="background: #f3f4f6;">
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div class="form-group">
+                        <label>事項類型</label>
+                        <select id="category">
+                            <option>專案開發</option><option>會議討論</option><option>客戶拜訪</option><option>行政庶務</option><option value="其他">其他</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>狀態</label>
+                        <select id="status">
+                            <option value="已完成">✅ 已完成</option>
+                            <option value="未完成">⏳ 未完成</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>工作內容</label>
+                    <textarea id="content" rows="4" placeholder="請條列式輸入重點工作..." required></textarea>
+                </div>
+                <div class="form-group">
+                    <label>對象/備註</label>
+                    <input type="text" id="target" placeholder="客戶/專案/部門名稱">
+                </div>
+                <button type="submit" id="submitBtn">💾 儲存並同步至雲端</button>
+                <button type="button" id="cancelBtn" onclick="cancelEdit()" style="display:none; background:#6b7280; color:white; width:100%; margin-top:5px;">❌ 取消修改</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>📊 紀錄列表</h2>
+            <div class="filter-group">
+                <button class="filter-btn active" onclick="setFilter('thisWeek')" id="btn-thisWeek">本週</button>
+                <button class="filter-btn" onclick="setFilter('lastWeek')" id="btn-lastWeek">上週</button>
+                <button class="filter-btn" onclick="setFilter('thisMonth')" id="btn-thisMonth">本月</button>
+                <button class="filter-btn" onclick="setFilter('all')" id="btn-all">全部紀錄</button>
+                <select id="yearFilter" onchange="renderLogs()"></select>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-box"><div>總項目</div><div class="stat-num" id="totalCount">0</div></div>
+                <div class="stat-box green"><div>已完成</div><div class="stat-num" id="countDone">0</div></div>
+                <div class="stat-box red"><div>未完成</div><div class="stat-num" id="countTodo">0</div></div>
+            </div>
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead><tr><th>日期 / 人員</th><th>狀態</th><th>類型</th><th>內容</th><th>操作</th></tr></thead>
+                    <tbody id="logTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="monthly-tab" class="tab-content">
+        <div class="card">
+            <h2>🚀 月會資料自動彙整</h2>
+            <div style="background: #eff6ff; padding: 20px; border-radius: 10px;">
+                <label>選擇結算月份</label>
+                <input type="month" id="monthlyBaseMonth" style="margin-bottom: 15px;">
+                <button class="generate" style="width: 100%;" onclick="generateMonthlyReport()">⚡ 立即生成月會草稿</button>
+            </div>
+            <textarea id="monthlyOutput" style="width:100%; height:400px; margin-top:15px; font-family:monospace; padding:15px; border-radius: 8px;" placeholder="生成後的資料會顯示在這裡..."></textarea>
+            <button class="copy" onclick="copyMonthlyReport()" style="width:100%; margin-top:10px; padding:12px;">📋 複製草稿內容</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ⚠️⚠️⚠️ 記得在這裡貼上你的 API 網址！ ⚠️⚠️⚠️
+    const API_URL = "https://script.google.com/macros/s/AKfycbyJswRobrbS5wEznlXjBTUguOR-ZbUuJq1IF1ruomiHnokwyMBfYMhCX0o1Tmlfg0ck/exec";
+
+    let currentUser = { name: "", role: "" };
+    let cloudLogs = [];
+    let currentFilter = 'thisWeek';
+
+    function showLoading(show) { document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none'; }
+
+    async function callAPI(action, params) {
+        showLoading(true);
+        try {
+            const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action, ...params }) });
+            const data = await res.json();
+            showLoading(false);
+            return data;
+        } catch (e) { showLoading(false); alert("連線失敗！請確認網址。"); return { success: false }; }
+    }
+
+    function handleDateStartChange() {
+        const startVal = document.getElementById('dateStart').value;
+        const endInput = document.getElementById('dateEnd');
+        endInput.min = startVal;
+        if (endInput.value && endInput.value < startVal) {
+            endInput.value = startVal;
+        }
+        autoCalcWeek();
+    }
+
+    function handleDateEndChange() {
+        const startVal = document.getElementById('dateStart').value;
+        const endVal = document.getElementById('dateEnd').value;
+        if (startVal && endVal && endVal < startVal) {
+            alert("⚠️ 防呆提醒：結束日期不能早於開始日期喔！");
+            document.getElementById('dateEnd').value = startVal;
+        }
+    }
+
+    function getISOWeekString(dateObj) {
+        const tempDate = new Date(dateObj.getTime());
+        tempDate.setHours(0, 0, 0, 0);
+        tempDate.setDate(tempDate.getDate() + 3 - (tempDate.getDay() + 6) % 7);
+        const week1 = new Date(tempDate.getFullYear(), 0, 4);
+        const weekNo = 1 + Math.round(((tempDate.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+        return tempDate.getFullYear() + "-W" + String(weekNo).padStart(2, '0');
+    }
+
+    function getLastWeekString() {
+        let d = new Date();
+        d.setDate(d.getDate() - 7);
+        return getISOWeekString(d);
+    }
+
+    function autoCalcWeek() {
+        const dateVal = document.getElementById('dateStart').value;
+        if(!dateVal) return;
+        
+        if(!document.getElementById('dateEnd').value) {
+            document.getElementById('dateEnd').value = dateVal;
+        }
+
+        const d = new Date(dateVal);
+        document.getElementById('reportWeek').value = getISOWeekString(d);
+        
+        const tempDate = new Date(d.getTime());
+        tempDate.setDate(tempDate.getDate() + 3 - (tempDate.getDay() + 6) % 7);
+        document.getElementById('reportMonth').value = tempDate.getFullYear() + "-" + String(tempDate.getMonth() + 1).padStart(2, '0');
+    }
+
+    async function login() {
+        const name = document.getElementById('loginName').value;
+        const password = document.getElementById('loginPassword').value;
+        const res = await callAPI('login', { name, password });
+        if (res.success) {
+            currentUser = { name, role: res.role };
+            document.getElementById('displayUserName').innerText = name;
+            document.getElementById('displayUserRole').innerText = res.role === 'Admin' ? '管理員' : '一般員工';
+            document.getElementById('reporter').value = name;
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('app-screen').style.display = 'block';
+            if (res.role === 'Admin') document.getElementById('btn-monthly-tab').style.display = 'block';
+            
+            document.getElementById('dateStart').valueAsDate = new Date();
+            handleDateStartChange(); 
+            loadLogs();
+        } else alert(res.message);
+    }
+
+    function logout() { location.reload(); }
+
+    async function promptChangePassword() {
+        const oldPw = prompt("請輸入【舊】密碼：");
+        if (!oldPw) return;
+        const newPw = prompt("請輸入【新】密碼：");
+        if (!newPw) return;
+        const res = await callAPI('changePassword', { name: currentUser.name, oldPassword: oldPw, newPassword: newPw });
+        if (res.success) alert("✅ 密碼修改成功！"); else alert("❌ 錯誤：" + res.message);
+    }
+
+    async function loadLogs() {
+        const res = await callAPI('getLogs', { name: currentUser.name, role: currentUser.role });
+        if (res.success) { 
+            cloudLogs = res.data; 
+            updateYearDropdown(); 
+            renderLogs(); 
+        }
+    }
+
+    function updateYearDropdown() {
+        const yearSelect = document.getElementById('yearFilter');
+        const years = new Set();
+        cloudLogs.forEach(log => {
+            if (log.reportMonth) years.add(log.reportMonth.split('-')[0]);
+        });
+        years.add(String(new Date().getFullYear()));
+        const sortedYears = Array.from(years).sort((a, b) => b - a);
+        
+        yearSelect.innerHTML = '<option value="All">所有年份</option>';
+        sortedYears.forEach(y => {
+            yearSelect.innerHTML += `<option value="${y}">${y} 年</option>`;
+        });
+    }
+
+    function setFilter(f) { 
+        currentFilter = f; 
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('btn-' + f).classList.add('active');
+        document.getElementById('yearFilter').style.display = (f === 'all') ? 'inline-block' : 'none';
+        renderLogs(); 
+    }
+
+    function renderLogs() {
+        const tbody = document.getElementById('logTableBody');
+        tbody.innerHTML = '';
+        
+        const currentWeekStr = getISOWeekString(new Date());
+        const lastWeekStr = getLastWeekString();
+        // 修正：確保月份補零邏輯不會出錯
+        const currentMonthStr = new Date().getFullYear() + "-" + String(new Date().getMonth() + 1).padStart(2, '0');
+        const selectedYear = document.getElementById('yearFilter').value;
+
+        const filtered = cloudLogs.filter(log => {
+            if (currentFilter === 'thisWeek') return log.reportWeek === currentWeekStr;
+            if (currentFilter === 'lastWeek') return log.reportWeek === lastWeekStr;
+            // 修正：本月過濾條件改為比對前綴，避免格式不一致
+            if (currentFilter === 'thisMonth') {
+                return log.reportMonth && log.reportMonth.startsWith(currentMonthStr);
+            }
+            if (currentFilter === 'all') {
+                if (selectedYear === 'All') return true;
+                return log.reportMonth && log.reportMonth.startsWith(selectedYear);
+            }
+            return true;
+        });
+        
+        document.getElementById('totalCount').innerText = filtered.length;
+        document.getElementById('countDone').innerText = filtered.filter(l=>l.status==='已完成').length;
+        document.getElementById('countTodo').innerText = filtered.filter(l=>l.status==='未完成').length;
+
+        filtered.sort((a,b) => {
+            const dateA = a.note ? a.note.split('|')[0] : a.reportWeek;
+            const dateB = b.note ? b.note.split('|')[0] : b.reportWeek;
+            return dateB.localeCompare(dateA);
+        }).forEach(log => {
+            const tr = document.createElement('tr');
+            const statusClass = log.status === '已完成' ? 'status-done' : 'status-todo';
+            
+            let displayDate = log.reportWeek;
+            if (log.note) {
+                if (log.note.includes('|')) {
+                    const parts = log.note.split('|');
+                    const start = parts[0].replace(/-/g, '/');
+                    const end = parts[1] ? parts[1].replace(/-/g, '/') : start;
+                    displayDate = (start === end) ? start : `${start} ~ ${end.substring(5)}`;
+                } else if (log.note.includes('-')) {
+                    displayDate = log.note.replace(/-/g, '/');
+                }
+            }
+
+            tr.innerHTML = `
+                <td><strong style="color:var(--primary); font-size:15px;">${displayDate}</strong><br><small style="color:#666">${log.reporter}</small></td>
+                <td><span class="status-tag ${statusClass}">${log.status}</span></td>
+                <td>${log.category}</td>
+                <td class="text-wrap">${log.content}</td>
+                <td>
+                    <button onclick="editLog('${log.id}')" style="background:var(--warning); color:white; padding:4px 8px;">改</button>
+                    <button onclick="deleteLog('${log.id}')" style="background:#ef4444; color:white; padding:4px 8px;">刪</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    document.getElementById('logForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        autoCalcWeek();
+        const logData = {
+            id: document.getElementById('editId').value,
+            reportWeek: document.getElementById('reportWeek').value,
+            reportMonth: document.getElementById('reportMonth').value,
+            reporter: document.getElementById('reporter').value,
+            category: document.getElementById('category').value,
+            status: document.getElementById('status').value,
+            content: document.getElementById('content').value,
+            target: document.getElementById('target').value,
+            note: document.getElementById('dateStart').value + '|' + document.getElementById('dateEnd').value 
+        };
+        const res = await callAPI('saveLog', { logData });
+        if (res.success) { cancelEdit(); loadLogs(); }
+    });
+
+    function editLog(id) {
+        const log = cloudLogs.find(l => l.id.toString() === id.toString());
+        if(!log) return;
+        
+        if (log.note) {
+            if (log.note.includes('|')) {
+                const parts = log.note.split('|');
+                document.getElementById('dateStart').value = parts[0];
+                document.getElementById('dateEnd').value = parts[1];
+            } else {
+                document.getElementById('dateStart').value = log.note;
+                document.getElementById('dateEnd').value = log.note;
+            }
+        }
+
+        document.getElementById('editId').value = log.id;
+        document.getElementById('category').value = log.category;
+        document.getElementById('status').value = log.status;
+        document.getElementById('content').value = log.content;
+        document.getElementById('target').value = log.target;
+        document.getElementById('submitBtn').innerText = "🔄 更新這筆資料";
+        document.getElementById('cancelBtn').style.display = "block";
+        window.scrollTo({top:0, behavior:'smooth'});
+    }
+
+    function cancelEdit() {
+        document.getElementById('logForm').reset();
+        document.getElementById('editId').value = "";
+        document.getElementById('submitBtn').innerText = "💾 儲存並同步至雲端";
+        document.getElementById('cancelBtn').style.display = "none";
+        document.getElementById('dateStart').valueAsDate = new Date();
+        document.getElementById('dateEnd').value = "";
+        document.getElementById('reporter').value = currentUser.name;
+    }
+
+    async function deleteLog(id) {
+        if(confirm('確定要刪除這筆紀錄嗎？')) {
+            const res = await callAPI('deleteLog', { id });
+            if (res.success) loadLogs();
+        }
+    }
+
+    function switchTab(t) {
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(t + '-tab').classList.add('active');
+        document.getElementById('btn-' + t + (t==='monthly'?'-tab':'')).classList.add('active');
+    }
+
+    function generateMonthlyReport() {
+        const m = document.getElementById('monthlyBaseMonth').value;
+        if(!m) return alert("請選擇月份");
+        let grouped = {};
+        cloudLogs.filter(l => l.reportMonth && l.reportMonth.startsWith(m)).forEach(l => {
+            if(!grouped[l.reporter]) grouped[l.reporter] = {};
+            if(!grouped[l.reporter][l.category]) grouped[l.reporter][l.category] = [];
+            grouped[l.reporter][l.category].push(l);
+        });
+        
+        let txt = `【${m} 月會報告彙整】\n\n`;
+        for(let user in grouped) {
+            txt += `👤 負責人：${user}\n`;
+            for(let cat in grouped[user]) {
+                txt += `  📌 [${cat}]\n`;
+                grouped[user][cat].sort((a,b) => (a.note||"").localeCompare(b.note||"")).forEach(item => { 
+                    
+                    let displayDate = item.reportWeek;
+                    if (item.note) {
+                        if (item.note.includes('|')) {
+                            const parts = item.note.split('|');
+                            const start = parts[0].substring(5).replace(/-/g, '/');
+                            const end = parts[1] ? parts[1].substring(5).replace(/-/g, '/') : start;
+                            displayDate = start === end ? start : `${start}~${end}`;
+                        } else if (item.note.includes('-')) {
+                            displayDate = item.note.substring(5).replace(/-/g, '/');
+                        }
+                    }
+
+                    txt += `    - (${displayDate}) ${item.content}\n`; 
+                });
+            }
+            txt += `\n`;
+        }
+        document.getElementById('monthlyOutput').value = txt;
+    }
+
+    function copyMonthlyReport() {
+        document.getElementById('monthlyOutput').select();
+        document.execCommand('copy');
+        alert("✅ 已複製到剪貼簿！");
+    }
+</script>
+</body>
+</html>        #submitBtn { background: var(--primary); color: white; width: 100%; font-weight: bold; padding: 12px; font-size: 16px; }
+        button.generate { background: #7c3aed; color: white; font-weight: bold; padding: 10px 20px; }
+        button.copy { background: var(--success); color: white; font-weight: bold; }
+
+        .filter-group { display: flex; gap: 10px; margin-bottom: 15px; align-items: center; }
+        .filter-btn { flex: 1; padding: 10px; background: #f3f4f6; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; color: #4b5563; transition: 0.2s; }
+        .filter-btn.active { background: var(--primary); color: white; }
+        #yearFilter { padding: 8px; border-radius: 5px; border: 1px solid #d1d5db; display: none; font-weight: bold; color: var(--primary); outline: none; }
+
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+        .stat-box { background: #eff6ff; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #dbeafe; }
+        .stat-box.red { background: #fef2f2; border-color: #fee2e2; }
+        .stat-box.green { background: #f0fdf4; border-color: #dcfce7; }
+        .stat-num { font-size: 24px; font-weight: bold; margin-top: 5px; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+        th { background: #f9fafb; font-weight: bold; color: #4b5563; }
+        .status-tag { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; display: inline-block; }
+        .status-done { background: #dcfce7; color: #166534; }
+        .status-todo { background: #fee2e2; color: #991b1b; }
+        
+        #loadingOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 9999; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; color: var(--primary); }
+    </style>
+</head>
+<body>
+
+<div id="loadingOverlay">⏳ 系統處理中...</div>
+
+<div id="login-screen">
+    <h1>📝 團隊週報系統</h1>
+    <div class="form-group">
+        <label>登入身分</label>
+        <select id="loginName">
+            <option value="Eddy">Eddy</option><option value="Shaders">Shaders</option>
+            <option value="Yang">Yang</option><option value="Nico">Nico</option>
+            <option value="Yueh">Yueh</option><option value="Lidia">Lidia</option>
+            <option value="Admin">Admin (管理員)</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label>專屬密碼</label>
+        <input type="password" id="loginPassword" placeholder="預設密碼為 0000" onkeypress="if(event.key==='Enter') login()">
+    </div>
+    <button onclick="login()" style="background: var(--primary); color: white; width: 100%; font-weight: bold; padding: 12px;">登入系統</button>
+</div>
+
+<div class="container" id="app-screen">
+    <div class="header-bar">
+        <div class="user-info">👤 <span id="displayUserName"></span> (<span id="displayUserRole"></span>)</div>
+        <div class="header-btns">
+            <button onclick="promptChangePassword()">⚙️ 變更密碼</button>
+            <button class="logout" onclick="logout()">登出</button>
+        </div>
+    </div>
+
+    <div class="nav-tabs">
+        <button class="nav-btn active" id="btn-weekly" onclick="switchTab('weekly')">📄 填寫週報項目</button>
+        <button class="nav-btn" id="btn-monthly-tab" onclick="switchTab('monthly')" style="display: none;">📅 月會資料彙整</button>
+    </div>
+
+    <div id="weekly-tab" class="tab-content active">
+        <div class="card">
+            <h2 id="formTitle">✍️ 新增項目</h2>
+            <form id="logForm">
+                <input type="hidden" id="editId">
+                <div class="form-group">
+                    <label>選擇日期區間 (若是單日，右邊不填即可)</label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
                         <input type="date" id="dateStart" required onchange="autoCalcWeek()">
                         <span style="font-weight: bold; color: #6b7280;">~</span>
                         <input type="date" id="dateEnd">
