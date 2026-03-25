@@ -38,6 +38,11 @@
         button.generate { background: #7c3aed; color: white; font-weight: bold; padding: 10px 20px; }
         button.copy { background: var(--success); color: white; font-weight: bold; }
 
+        .filter-group { display: flex; gap: 10px; margin-bottom: 15px; align-items: center; }
+        .filter-btn { flex: 1; padding: 10px; background: #f3f4f6; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; color: #4b5563; transition: 0.2s; }
+        .filter-btn.active { background: var(--primary); color: white; }
+        #yearFilter { padding: 8px; border-radius: 5px; border: 1px solid #d1d5db; display: none; font-weight: bold; color: var(--primary); outline: none; }
+
         .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px; }
         .stat-box { background: #eff6ff; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #dbeafe; }
         .stat-box.red { background: #fef2f2; border-color: #fee2e2; }
@@ -139,10 +144,15 @@
 
         <div class="card">
             <h2>📊 紀錄列表</h2>
-            <div style="display:flex; gap:10px; margin-bottom:15px;">
-                <button class="nav-btn" style="flex:1; font-size: 14px;" onclick="setFilter('thisWeek')" id="btn-thisWeek">本週</button>
-                <button class="nav-btn" style="flex:1; font-size: 14px;" onclick="setFilter('all')" id="btn-all">全部紀錄</button>
+            
+            <div class="filter-group">
+                <button class="filter-btn active" onclick="setFilter('thisWeek')" id="btn-thisWeek">本週</button>
+                <button class="filter-btn" onclick="setFilter('lastWeek')" id="btn-lastWeek">上週</button>
+                <button class="filter-btn" onclick="setFilter('thisMonth')" id="btn-thisMonth">本月</button>
+                <button class="filter-btn" onclick="setFilter('all')" id="btn-all">全部紀錄</button>
+                <select id="yearFilter" onchange="renderLogs()"></select>
             </div>
+
             <div class="stats-grid">
                 <div class="stat-box"><div>總項目</div><div class="stat-num" id="totalCount">0</div></div>
                 <div class="stat-box green"><div>已完成</div><div class="stat-num" id="countDone">0</div></div>
@@ -191,7 +201,7 @@
         } catch (e) { showLoading(false); alert("連線失敗！請確認網址。"); return { success: false }; }
     }
 
-    // 計算當前週次的標準字串 (例如：2026-W13)
+    // 計算當前週次的標準字串
     function getISOWeekString(dateObj) {
         const tempDate = new Date(dateObj.getTime());
         tempDate.setHours(0, 0, 0, 0);
@@ -201,11 +211,17 @@
         return tempDate.getFullYear() + "-W" + String(weekNo).padStart(2, '0');
     }
 
+    // 取得上週的標準字串
+    function getLastWeekString() {
+        let d = new Date();
+        d.setDate(d.getDate() - 7);
+        return getISOWeekString(d);
+    }
+
     function autoCalcWeek() {
         const dateVal = document.getElementById('dateStart').value;
         if(!dateVal) return;
         
-        // 如果沒填結束日期，自動補上與開始日期相同
         if(!document.getElementById('dateEnd').value) {
             document.getElementById('dateEnd').value = dateVal;
         }
@@ -213,7 +229,6 @@
         const d = new Date(dateVal);
         document.getElementById('reportWeek').value = getISOWeekString(d);
         
-        // 計算歸屬月份 (取這週的週四所在月份)
         const tempDate = new Date(d.getTime());
         tempDate.setDate(tempDate.getDate() + 3 - (tempDate.getDay() + 6) % 7);
         document.getElementById('reportMonth').value = tempDate.getFullYear() + "-" + String(tempDate.getMonth() + 1).padStart(2, '0');
@@ -251,21 +266,67 @@
 
     async function loadLogs() {
         const res = await callAPI('getLogs', { name: currentUser.name, role: currentUser.role });
-        if (res.success) { cloudLogs = res.data; renderLogs(); }
+        if (res.success) { 
+            cloudLogs = res.data; 
+            updateYearDropdown(); // 更新年份選單
+            renderLogs(); 
+        }
+    }
+
+    // 從資料中提取所有年份，並生成下拉選單
+    function updateYearDropdown() {
+        const yearSelect = document.getElementById('yearFilter');
+        const years = new Set();
+        cloudLogs.forEach(log => {
+            if (log.reportMonth) years.add(log.reportMonth.split('-')[0]);
+        });
+        
+        // 確保至少有今年
+        years.add(String(new Date().getFullYear()));
+        
+        const sortedYears = Array.from(years).sort((a, b) => b - a); // 降冪排列
+        
+        yearSelect.innerHTML = '<option value="All">所有年份</option>';
+        sortedYears.forEach(y => {
+            yearSelect.innerHTML += `<option value="${y}">${y} 年</option>`;
+        });
+    }
+
+    function setFilter(f) { 
+        currentFilter = f; 
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById('btn-' + f).classList.add('active');
+        
+        // 只有選「全部紀錄」時才顯示年份選單
+        document.getElementById('yearFilter').style.display = (f === 'all') ? 'inline-block' : 'none';
+        
+        renderLogs(); 
     }
 
     function renderLogs() {
         const tbody = document.getElementById('logTableBody');
         tbody.innerHTML = '';
+        
         const currentWeekStr = getISOWeekString(new Date());
+        const lastWeekStr = getLastWeekString();
+        const currentMonthStr = new Date().getFullYear() + "-" + String(new Date().getMonth() + 1).padStart(2, '0');
+        const selectedYear = document.getElementById('yearFilter').value;
 
-        const filtered = cloudLogs.filter(l => currentFilter === 'all' || l.reportWeek === currentWeekStr);
+        const filtered = cloudLogs.filter(log => {
+            if (currentFilter === 'thisWeek') return log.reportWeek === currentWeekStr;
+            if (currentFilter === 'lastWeek') return log.reportWeek === lastWeekStr;
+            if (currentFilter === 'thisMonth') return log.reportMonth === currentMonthStr;
+            if (currentFilter === 'all') {
+                if (selectedYear === 'All') return true;
+                return log.reportMonth && log.reportMonth.startsWith(selectedYear);
+            }
+            return true;
+        });
         
         document.getElementById('totalCount').innerText = filtered.length;
         document.getElementById('countDone').innerText = filtered.filter(l=>l.status==='已完成').length;
         document.getElementById('countTodo').innerText = filtered.filter(l=>l.status==='未完成').length;
 
-        // 依照開始日期做降冪排序 (最新的在最上面)
         filtered.sort((a,b) => {
             const dateA = a.note ? a.note.split('|')[0] : a.reportWeek;
             const dateB = b.note ? b.note.split('|')[0] : b.reportWeek;
@@ -274,17 +335,12 @@
             const tr = document.createElement('tr');
             const statusClass = log.status === '已完成' ? 'status-done' : 'status-todo';
             
-            // 處理日期區間顯示邏輯
             let displayDate = log.reportWeek;
             if (log.note && log.note.includes('|')) {
                 const parts = log.note.split('|');
                 const start = parts[0].replace(/-/g, '/');
                 const end = parts[1].replace(/-/g, '/');
-                if (start === end) {
-                    displayDate = start; // 同一天只顯示一次：2026/03/23
-                } else {
-                    displayDate = start + ' ~ ' + parts[1].substring(5).replace(/-/g, '/'); // 跨日顯示：2026/03/23 ~ 03/26
-                }
+                displayDate = (start === end) ? start : `${start} ~ ${parts[1].substring(5).replace(/-/g, '/')}`;
             }
 
             tr.innerHTML = `
@@ -313,7 +369,6 @@
             status: document.getElementById('status').value,
             content: document.getElementById('content').value,
             target: document.getElementById('target').value,
-            // 巧妙利用 Note 欄位來存「開始日期|結束日期」
             note: document.getElementById('dateStart').value + '|' + document.getElementById('dateEnd').value 
         };
         const res = await callAPI('saveLog', { logData });
@@ -324,7 +379,6 @@
         const log = cloudLogs.find(l => l.id.toString() === id.toString());
         if(!log) return;
         
-        // 拆解儲存在 Note 的日期資料
         if (log.note && log.note.includes('|')) {
             const parts = log.note.split('|');
             document.getElementById('dateStart').value = parts[0];
@@ -380,13 +434,12 @@
             txt += `👤 負責人：${user}\n`;
             for(let cat in grouped[user]) {
                 txt += `  📌 [${cat}]\n`;
-                // 針對月會報告的日期區間做美化處理
                 grouped[user][cat].sort((a,b) => (a.note||"").localeCompare(b.note||"")).forEach(item => { 
                     let displayDate = item.reportWeek;
                     if (item.note && item.note.includes('|')) {
                         const parts = item.note.split('|');
-                        const start = parts[0].substring(5).replace(/-/g, '/'); // 03/23
-                        const end = parts[1].substring(5).replace(/-/g, '/'); // 03/26
+                        const start = parts[0].substring(5).replace(/-/g, '/');
+                        const end = parts[1].substring(5).replace(/-/g, '/');
                         displayDate = start === end ? start : `${start}~${end}`;
                     }
                     txt += `    - (${displayDate}) ${item.content}\n`; 
@@ -401,13 +454,6 @@
         document.getElementById('monthlyOutput').select();
         document.execCommand('copy');
         alert("✅ 已複製到剪貼簿！");
-    }
-
-    function setFilter(f) { 
-        currentFilter = f; 
-        document.getElementById('btn-thisWeek').classList.toggle('active', f==='thisWeek');
-        document.getElementById('btn-all').classList.toggle('active', f==='all');
-        renderLogs(); 
     }
 </script>
 </body>
