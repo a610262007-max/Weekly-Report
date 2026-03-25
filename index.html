@@ -9,50 +9,41 @@
         body { font-family: 'Microsoft JhengHei', sans-serif; background: var(--bg); margin: 0; padding: 20px; color: var(--text); }
         .container { max-width: 1280px; margin: 0 auto; }
         
-        /* 登入介面 */
         #login-screen { max-width: 400px; margin: 100px auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; }
         #login-screen h1 { color: var(--primary); margin-top: 0; }
         #app-screen { display: none; }
         
-        /* 頂部導航 (圖二風格) */
         .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: white; padding: 15px 20px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         .user-info { font-weight: bold; color: var(--primary); font-size: 16px; }
-        .header-btns button { margin-left: 10px; background: #e5e7eb; color: #374151; font-weight: bold; }
+        .header-btns button { margin-left: 10px; background: #e5e7eb; color: #374151; font-weight: bold; border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; transition: 0.2s;}
         .header-btns button.logout { background: #fee2e2; color: #991b1b; }
 
-        /* Tabs (圖二藍色風格) */
         .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; }
         .nav-btn { background: transparent; border: none; font-size: 16px; font-weight: bold; padding: 10px 20px; cursor: pointer; color: #6b7280; border-radius: 8px; transition: 0.3s; }
         .nav-btn.active { background: var(--primary); color: white; }
 
-        /* 佈局切換 */
         .tab-content { display: none; }
         .tab-content.active { display: grid; grid-template-columns: 1fr 2.5fr; gap: 20px; }
         #monthly-tab.active { display: block; max-width: 900px; margin: 0 auto; }
 
-        /* 卡片樣式 */
         .card { background: var(--white); padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
         h2 { margin-top: 0; color: var(--primary); border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
         
-        /* 表單內容 */
         .form-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 14px; }
         input, select, textarea { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 5px; box-sizing: border-box; font-size: 15px; }
         
-        /* 按鈕風格 */
         button { border: none; padding: 8px 16px; border-radius: 5px; cursor: pointer; font-size: 14px; transition: 0.2s; }
         #submitBtn { background: var(--primary); color: white; width: 100%; font-weight: bold; padding: 12px; font-size: 16px; }
         button.generate { background: #7c3aed; color: white; font-weight: bold; padding: 10px 20px; }
         button.copy { background: var(--success); color: white; font-weight: bold; }
 
-        /* 統計方塊 (恢復圖二設計) */
         .stats-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px; }
         .stat-box { background: #eff6ff; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #dbeafe; }
         .stat-box.red { background: #fef2f2; border-color: #fee2e2; }
         .stat-box.green { background: #f0fdf4; border-color: #dcfce7; }
         .stat-num { font-size: 24px; font-weight: bold; margin-top: 5px; }
 
-        /* 表格與標籤 */
         table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
         th { background: #f9fafb; font-weight: bold; color: #4b5563; }
@@ -60,7 +51,6 @@
         .status-done { background: #dcfce7; color: #166534; }
         .status-todo { background: #fee2e2; color: #991b1b; }
         
-        /* 載入遮罩 */
         #loadingOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 9999; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; color: var(--primary); }
     </style>
 </head>
@@ -96,18 +86,22 @@
     </div>
 
     <div class="nav-tabs">
-        <button class="nav-btn active" id="btn-weekly" onclick="switchTab('weekly')">📄 個人週報填寫</button>
+        <button class="nav-btn active" id="btn-weekly" onclick="switchTab('weekly')">📄 填寫週報項目</button>
         <button class="nav-btn" id="btn-monthly-tab" onclick="switchTab('monthly')" style="display: none;">📅 月會資料彙整</button>
     </div>
 
     <div id="weekly-tab" class="tab-content active">
         <div class="card">
-            <h2 id="formTitle">✍️ 新增週報項目</h2>
+            <h2 id="formTitle">✍️ 新增項目</h2>
             <form id="logForm">
                 <input type="hidden" id="editId">
                 <div class="form-group">
-                    <label>選擇日期 (系統將自動轉換為週次)</label>
-                    <input type="date" id="dateInput" required onchange="autoCalcWeek()">
+                    <label>選擇日期區間 (若是單日，右邊不填即可)</label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="date" id="dateStart" required onchange="autoCalcWeek()">
+                        <span style="font-weight: bold; color: #6b7280;">~</span>
+                        <input type="date" id="dateEnd">
+                    </div>
                     <input type="hidden" id="reportWeek">
                     <input type="hidden" id="reportMonth">
                 </div>
@@ -119,11 +113,8 @@
                     <div class="form-group">
                         <label>事項類型</label>
                         <select id="category">
-                            <option>專案開發</option>
-                            <option>會議討論</option>
-                            <option>客戶拜訪</option>
-                            <option>行政庶務</option>
-                            <option value="其他">其他</option> </select>
+                            <option>專案開發</option><option>會議討論</option><option>客戶拜訪</option><option>行政庶務</option><option value="其他">其他</option>
+                        </select>
                     </div>
                     <div class="form-group">
                         <label>狀態</label>
@@ -135,7 +126,7 @@
                 </div>
                 <div class="form-group">
                     <label>工作內容</label>
-                    <textarea id="content" rows="4" placeholder="請條列式輸入本週重點工作..." required></textarea>
+                    <textarea id="content" rows="4" placeholder="請條列式輸入重點工作..." required></textarea>
                 </div>
                 <div class="form-group">
                     <label>對象/備註</label>
@@ -149,7 +140,7 @@
         <div class="card">
             <h2>📊 紀錄列表</h2>
             <div style="display:flex; gap:10px; margin-bottom:15px;">
-                <button class="nav-btn" style="flex:1; font-size: 14px;" onclick="setFilter('thisMonth')" id="btn-thisMonth">本月</button>
+                <button class="nav-btn" style="flex:1; font-size: 14px;" onclick="setFilter('thisWeek')" id="btn-thisWeek">本週</button>
                 <button class="nav-btn" style="flex:1; font-size: 14px;" onclick="setFilter('all')" id="btn-all">全部紀錄</button>
             </div>
             <div class="stats-grid">
@@ -159,7 +150,7 @@
             </div>
             <div style="overflow-x: auto;">
                 <table>
-                    <thead><tr><th>日期/人員</th><th>狀態</th><th>類型</th><th>內容</th><th>操作</th></tr></thead>
+                    <thead><tr><th>日期 / 人員</th><th>狀態</th><th>類型</th><th>內容</th><th>操作</th></tr></thead>
                     <tbody id="logTableBody"></tbody>
                 </table>
             </div>
@@ -181,11 +172,12 @@
 </div>
 
 <script>
-    const API_URL = "https://script.google.com/macros/s/AKfycbyJswRobrbS5wEznlXjBTUguOR-ZbUuJq1IF1ruomiHnokwyMBfYMhCX0o1Tmlfg0ck/exec"; // ⚠️ 務必換成你的 GAS 網址
+    // ⚠️⚠️⚠️ 記得在這裡貼上你的 API 網址！ ⚠️⚠️⚠️
+    const API_URL = "https://script.google.com/macros/s/AKfycbyJswRobrbS5wEznlXjBTUguOR-ZbUuJq1IF1ruomiHnokwyMBfYMhCX0o1Tmlfg0ck/exec";
 
     let currentUser = { name: "", role: "" };
     let cloudLogs = [];
-    let currentFilter = 'all';
+    let currentFilter = 'thisWeek';
 
     function showLoading(show) { document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none'; }
 
@@ -196,25 +188,34 @@
             const data = await res.json();
             showLoading(false);
             return data;
-        } catch (e) { showLoading(false); alert("連線失敗！"); return { success: false }; }
+        } catch (e) { showLoading(false); alert("連線失敗！請確認網址。"); return { success: false }; }
     }
 
-    // 自動計算週次與月份的邏輯 (由日期驅動)
-    function autoCalcWeek() {
-        const dateVal = document.getElementById('dateInput').value;
-        if(!dateVal) return;
-        const d = new Date(dateVal);
-        
-        // 計算週次 (ISO 週次)
-        const tempDate = new Date(d.getTime());
+    // 計算當前週次的標準字串 (例如：2026-W13)
+    function getISOWeekString(dateObj) {
+        const tempDate = new Date(dateObj.getTime());
         tempDate.setHours(0, 0, 0, 0);
         tempDate.setDate(tempDate.getDate() + 3 - (tempDate.getDay() + 6) % 7);
         const week1 = new Date(tempDate.getFullYear(), 0, 4);
         const weekNo = 1 + Math.round(((tempDate.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+        return tempDate.getFullYear() + "-W" + String(weekNo).padStart(2, '0');
+    }
+
+    function autoCalcWeek() {
+        const dateVal = document.getElementById('dateStart').value;
+        if(!dateVal) return;
         
-        document.getElementById('reportWeek').value = d.getFullYear() + "-W" + String(weekNo).padStart(2, '0');
+        // 如果沒填結束日期，自動補上與開始日期相同
+        if(!document.getElementById('dateEnd').value) {
+            document.getElementById('dateEnd').value = dateVal;
+        }
+
+        const d = new Date(dateVal);
+        document.getElementById('reportWeek').value = getISOWeekString(d);
         
-        // 計算歸屬月份 (取週四所在月份)
+        // 計算歸屬月份 (取這週的週四所在月份)
+        const tempDate = new Date(d.getTime());
+        tempDate.setDate(tempDate.getDate() + 3 - (tempDate.getDay() + 6) % 7);
         document.getElementById('reportMonth').value = tempDate.getFullYear() + "-" + String(tempDate.getMonth() + 1).padStart(2, '0');
     }
 
@@ -231,8 +232,7 @@
             document.getElementById('app-screen').style.display = 'block';
             if (res.role === 'Admin') document.getElementById('btn-monthly-tab').style.display = 'block';
             
-            // 初始化日期為今天
-            document.getElementById('dateInput').valueAsDate = new Date();
+            document.getElementById('dateStart').valueAsDate = new Date();
             autoCalcWeek();
             loadLogs();
         } else alert(res.message);
@@ -246,8 +246,7 @@
         const newPw = prompt("請輸入【新】密碼：");
         if (!newPw) return;
         const res = await callAPI('changePassword', { name: currentUser.name, oldPassword: oldPw, newPassword: newPw });
-        if (res.success) alert("✅ 密碼修改成功！");
-        else alert("❌ 錯誤：" + res.message);
+        if (res.success) alert("✅ 密碼修改成功！"); else alert("❌ 錯誤：" + res.message);
     }
 
     async function loadLogs() {
@@ -258,19 +257,38 @@
     function renderLogs() {
         const tbody = document.getElementById('logTableBody');
         tbody.innerHTML = '';
-        const nowMonth = new Date().getFullYear() + "-" + String(new Date().getMonth()+1).padStart(2,'0');
-        const filtered = cloudLogs.filter(l => currentFilter === 'all' || l.reportMonth === nowMonth);
+        const currentWeekStr = getISOWeekString(new Date());
+
+        const filtered = cloudLogs.filter(l => currentFilter === 'all' || l.reportWeek === currentWeekStr);
         
         document.getElementById('totalCount').innerText = filtered.length;
         document.getElementById('countDone').innerText = filtered.filter(l=>l.status==='已完成').length;
         document.getElementById('countTodo').innerText = filtered.filter(l=>l.status==='未完成').length;
 
-        filtered.sort((a,b) => b.reportWeek.localeCompare(a.reportWeek)).forEach(log => {
+        // 依照開始日期做降冪排序 (最新的在最上面)
+        filtered.sort((a,b) => {
+            const dateA = a.note ? a.note.split('|')[0] : a.reportWeek;
+            const dateB = b.note ? b.note.split('|')[0] : b.reportWeek;
+            return dateB.localeCompare(dateA);
+        }).forEach(log => {
             const tr = document.createElement('tr');
             const statusClass = log.status === '已完成' ? 'status-done' : 'status-todo';
-            // 這裡顯示原本的日期或週次
+            
+            // 處理日期區間顯示邏輯
+            let displayDate = log.reportWeek;
+            if (log.note && log.note.includes('|')) {
+                const parts = log.note.split('|');
+                const start = parts[0].replace(/-/g, '/');
+                const end = parts[1].replace(/-/g, '/');
+                if (start === end) {
+                    displayDate = start; // 同一天只顯示一次：2026/03/23
+                } else {
+                    displayDate = start + ' ~ ' + parts[1].substring(5).replace(/-/g, '/'); // 跨日顯示：2026/03/23 ~ 03/26
+                }
+            }
+
             tr.innerHTML = `
-                <td>${log.reportWeek}<br><small style="color:#666">${log.reporter}</small></td>
+                <td><strong style="color:var(--primary); font-size:15px;">${displayDate}</strong><br><small style="color:#666">${log.reporter}</small></td>
                 <td><span class="status-tag ${statusClass}">${log.status}</span></td>
                 <td>${log.category}</td>
                 <td class="text-wrap">${log.content}</td>
@@ -295,7 +313,8 @@
             status: document.getElementById('status').value,
             content: document.getElementById('content').value,
             target: document.getElementById('target').value,
-            note: document.getElementById('dateInput').value // 備註欄借來存具體日期
+            // 巧妙利用 Note 欄位來存「開始日期|結束日期」
+            note: document.getElementById('dateStart').value + '|' + document.getElementById('dateEnd').value 
         };
         const res = await callAPI('saveLog', { logData });
         if (res.success) { cancelEdit(); loadLogs(); }
@@ -304,8 +323,15 @@
     function editLog(id) {
         const log = cloudLogs.find(l => l.id.toString() === id.toString());
         if(!log) return;
+        
+        // 拆解儲存在 Note 的日期資料
+        if (log.note && log.note.includes('|')) {
+            const parts = log.note.split('|');
+            document.getElementById('dateStart').value = parts[0];
+            document.getElementById('dateEnd').value = parts[1];
+        }
+
         document.getElementById('editId').value = log.id;
-        document.getElementById('dateInput').value = log.note; // 從 Note 欄位取回日期
         document.getElementById('category').value = log.category;
         document.getElementById('status').value = log.status;
         document.getElementById('content').value = log.content;
@@ -320,7 +346,8 @@
         document.getElementById('editId').value = "";
         document.getElementById('submitBtn').innerText = "💾 儲存並同步至雲端";
         document.getElementById('cancelBtn').style.display = "none";
-        document.getElementById('dateInput').valueAsDate = new Date();
+        document.getElementById('dateStart').valueAsDate = new Date();
+        document.getElementById('dateEnd').value = "";
         document.getElementById('reporter').value = currentUser.name;
     }
 
@@ -347,12 +374,23 @@
             if(!grouped[l.reporter][l.category]) grouped[l.reporter][l.category] = [];
             grouped[l.reporter][l.category].push(l);
         });
+        
         let txt = `【${m} 月會報告彙整】\n\n`;
         for(let user in grouped) {
             txt += `👤 負責人：${user}\n`;
             for(let cat in grouped[user]) {
                 txt += `  📌 [${cat}]\n`;
-                grouped[user][cat].forEach(item => { txt += `    - ${item.content}\n`; });
+                // 針對月會報告的日期區間做美化處理
+                grouped[user][cat].sort((a,b) => (a.note||"").localeCompare(b.note||"")).forEach(item => { 
+                    let displayDate = item.reportWeek;
+                    if (item.note && item.note.includes('|')) {
+                        const parts = item.note.split('|');
+                        const start = parts[0].substring(5).replace(/-/g, '/'); // 03/23
+                        const end = parts[1].substring(5).replace(/-/g, '/'); // 03/26
+                        displayDate = start === end ? start : `${start}~${end}`;
+                    }
+                    txt += `    - (${displayDate}) ${item.content}\n`; 
+                });
             }
             txt += `\n`;
         }
@@ -367,7 +405,7 @@
 
     function setFilter(f) { 
         currentFilter = f; 
-        document.getElementById('btn-thisMonth').classList.toggle('active', f==='thisMonth');
+        document.getElementById('btn-thisWeek').classList.toggle('active', f==='thisWeek');
         document.getElementById('btn-all').classList.toggle('active', f==='all');
         renderLogs(); 
     }
