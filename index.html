@@ -110,7 +110,10 @@
 
 <div class="container" id="app-screen">
     <div class="header-bar">
-        <div class="company-name">舞雲智網股份有限公司</div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <img src="./LOGO.gif" alt="舞雲智網 LOGO" style="height: 35px;">
+            <div class="company-name">舞雲智網股份有限公司</div>
+        </div>
         
         <div class="user-panel">
             <div class="user-info-text">👤 <span id="displayUserName"></span> (<span id="displayUserRole"></span>)</div>
@@ -281,14 +284,13 @@
         const password = document.getElementById('loginPassword').value;
         if(!password) { alert("請輸入密碼！"); return; }
         
-        // --- 動態更新按鈕文字 ---
         const loginBtn = document.getElementById('loginBtn');
         loginBtn.innerText = "登入中...";
-        loginBtn.disabled = true; // 變更密碼前，按鈕變灰且不可點選
+        loginBtn.disabled = true;
 
-        const res = await callAPI('login', { name, password });
+        // ★ 這裡加上 true，登入時就不會跳出「全螢幕遮罩」，順利顯示「登入中...」
+        const res = await callAPI('login', { name, password }, true);
         
-        // 登入程序完成後還原按鈕
         loginBtn.innerText = "登入系統";
         loginBtn.disabled = false;
 
@@ -303,6 +305,7 @@
             
             document.getElementById('dateStart').valueAsDate = new Date();
             handleDateStartChange(); 
+            // 畫面切換後，再發送請求去載入資料列表 (帶入全螢幕載入畫面)
             loadLogs(false); 
         } else alert(res.message);
     }
