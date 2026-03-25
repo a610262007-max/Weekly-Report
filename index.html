@@ -67,8 +67,10 @@
 <div id="loadingOverlay">⏳ 系統處理中...</div>
 
 <div id="login-screen">
-    <img src="./LOGO.gif" alt="舞雲智網 LOGO" style="height: 60px; margin-bottom: 10px;">
-    <div style="color: #6b7280; font-size: 16px; font-weight: bold; margin-bottom: 20px;">舞雲智網股份有限公司</div>
+    <div style="display: flex; justify-content: center; align-items: center; gap: 15px; margin-bottom: 20px;">
+        <img src="./LOGO.gif" alt="舞雲智網 LOGO" style="height: 50px;">
+        <div style="color: #4b5563; font-size: 18px; font-weight: bold; letter-spacing: 1px;">舞雲智網股份有限公司</div>
+    </div>
     
     <h1 style="margin-bottom: 20px;">📝 團隊週報系統</h1>
     
@@ -257,7 +259,6 @@
         const password = document.getElementById('loginPassword').value;
         if(!password) { alert("請輸入密碼！"); return; }
         
-        // 按鈕動態效果
         const loginBtn = document.getElementById('loginBtn');
         loginBtn.innerText = "登入中...";
         loginBtn.disabled = true;
