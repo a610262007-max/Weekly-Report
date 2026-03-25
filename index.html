@@ -189,23 +189,25 @@
 
     function showLoading(show) { document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none'; }
 
-    async function callAPI(action, params) {
-        showLoading(true);
+    // 🌟 加速魔法 1：加入 silent 參數。如果 silent=true，就不會跳出全螢幕載入畫面，默默在背景做事！
+    async function callAPI(action, params, silent = false) {
+        if (!silent) showLoading(true);
         try {
             const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action, ...params }) });
             const data = await res.json();
-            showLoading(false);
+            if (!silent) showLoading(false);
             return data;
-        } catch (e) { showLoading(false); alert("連線失敗！請確認網址。"); return { success: false }; }
+        } catch (e) { 
+            if (!silent) { showLoading(false); alert("連線失敗！請確認網址。"); }
+            return { success: false }; 
+        }
     }
 
     function handleDateStartChange() {
         const startVal = document.getElementById('dateStart').value;
         const endInput = document.getElementById('dateEnd');
         endInput.min = startVal;
-        if (endInput.value && endInput.value < startVal) {
-            endInput.value = startVal;
-        }
+        if (endInput.value && endInput.value < startVal) { endInput.value = startVal; }
         autoCalcWeek();
     }
 
@@ -236,14 +238,9 @@
     function autoCalcWeek() {
         const dateVal = document.getElementById('dateStart').value;
         if(!dateVal) return;
-        
-        if(!document.getElementById('dateEnd').value) {
-            document.getElementById('dateEnd').value = dateVal;
-        }
-
+        if(!document.getElementById('dateEnd').value) { document.getElementById('dateEnd').value = dateVal; }
         const d = new Date(dateVal);
         document.getElementById('reportWeek').value = getISOWeekString(d);
-        
         const tempDate = new Date(d.getTime());
         tempDate.setDate(tempDate.getDate() + 3 - (tempDate.getDay() + 6) % 7);
         document.getElementById('reportMonth').value = tempDate.getFullYear() + "-" + String(tempDate.getMonth() + 1).padStart(2, '0');
@@ -264,7 +261,7 @@
             
             document.getElementById('dateStart').valueAsDate = new Date();
             handleDateStartChange(); 
-            loadLogs();
+            loadLogs(false); // 登入時需等待畫面
         } else alert(res.message);
     }
 
@@ -279,23 +276,19 @@
         if (res.success) alert("✅ 密碼修改成功！"); else alert("❌ 錯誤：" + res.message);
     }
 
-    async function loadLogs() {
-        const res = await callAPI('getLogs', { name: currentUser.name, role: currentUser.role });
+    // loadLogs 加入 silent 參數
+    async function loadLogs(silent = false) {
+        const res = await callAPI('getLogs', { name: currentUser.name, role: currentUser.role }, silent);
         if (res.success) { 
-            
-            // ====== 關鍵修正：對抗 Google Sheets 自動轉日期格式的怪僻 ======
             cloudLogs = res.data.map(log => {
                 if (log.reportMonth) {
                     let d = new Date(log.reportMonth);
-                    // 檢查它是否是被 Google 偷偷轉成日期的格式
                     if (!isNaN(d.getTime())) {
                         log.reportMonth = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, '0');
                     }
                 }
                 return log;
             });
-            // ==============================================================
-
             updateYearDropdown(); 
             renderLogs(); 
         }
@@ -336,7 +329,9 @@
         const filtered = cloudLogs.filter(log => {
             if (currentFilter === 'thisWeek') return log.reportWeek === currentWeekStr;
             if (currentFilter === 'lastWeek') return log.reportWeek === lastWeekStr;
-            if (currentFilter === 'thisMonth') return log.reportMonth === currentMonthStr;
+            if (currentFilter === 'thisMonth') {
+                return log.reportMonth && log.reportMonth.startsWith(currentMonthStr);
+            }
             if (currentFilter === 'all') {
                 if (selectedYear === 'All') return true;
                 return log.reportMonth && log.reportMonth.startsWith(selectedYear);
@@ -382,11 +377,17 @@
         });
     }
 
+    // 🌟 加速魔法 2：樂觀 UI (Optimistic UI) 儲存機制
     document.getElementById('logForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         autoCalcWeek();
+        
+        const editId = document.getElementById('editId').value;
+        const isEdit = editId !== "";
+        const currentId = isEdit ? editId : "temp_" + new Date().getTime(); // 產生暫時的 ID
+
         const logData = {
-            id: document.getElementById('editId').value,
+            id: isEdit ? editId : "", // 如果是新增，傳空值給後台讓它自己產生真實 ID
             reportWeek: document.getElementById('reportWeek').value,
             reportMonth: document.getElementById('reportMonth').value,
             reporter: document.getElementById('reporter').value,
@@ -396,11 +397,37 @@
             target: document.getElementById('target').value,
             note: document.getElementById('dateStart').value + '|' + document.getElementById('dateEnd').value 
         };
-        const res = await callAPI('saveLog', { logData });
-        if (res.success) { cancelEdit(); loadLogs(); }
+
+        // 瞬間更新前端畫面 (無需等待 API)
+        const tempLog = { ...logData, id: currentId };
+        if (isEdit) {
+            const index = cloudLogs.findIndex(l => l.id.toString() === currentId.toString());
+            if (index !== -1) cloudLogs[index] = tempLog;
+        } else {
+            cloudLogs.push(tempLog);
+        }
+        updateYearDropdown();
+        renderLogs();
+        cancelEdit(); // 瞬間清空表單
+
+        // 在背景靜默發送資料給 GAS 存檔
+        callAPI('saveLog', { logData }, true).then(res => {
+            if (res.success) {
+                // 存檔成功後，在背景靜默重新下載最新資料 (為了取得真實的 ID)
+                loadLogs(true);
+            } else {
+                alert("背景存檔失敗，請重新整理網頁！");
+            }
+        });
     });
 
     function editLog(id) {
+        // 防止使用者在背景同步完成前，去編輯暫時 ID 的項目
+        if (id.toString().startsWith("temp_")) {
+            alert("資料正在同步至雲端中，請等待幾秒後再修改！");
+            return;
+        }
+
         const log = cloudLogs.find(l => l.id.toString() === id.toString());
         if(!log) return;
         
@@ -435,10 +462,25 @@
         document.getElementById('reporter').value = currentUser.name;
     }
 
+    // 🌟 加速魔法 3：樂觀 UI (Optimistic UI) 刪除機制
     async function deleteLog(id) {
+        if (id.toString().startsWith("temp_")) {
+            alert("資料正在同步至雲端中，請等待幾秒後再刪除！");
+            return;
+        }
+
         if(confirm('確定要刪除這筆紀錄嗎？')) {
-            const res = await callAPI('deleteLog', { id });
-            if (res.success) loadLogs();
+            // 瞬間從畫面上移除
+            cloudLogs = cloudLogs.filter(l => l.id.toString() !== id.toString());
+            renderLogs();
+            
+            // 背景默默通知後端刪除
+            callAPI('deleteLog', { id }, true).then(res => {
+                if (!res.success) {
+                    alert("背景刪除失敗，請重新整理網頁！");
+                    loadLogs(true); // 失敗的話把資料抓回來
+                }
+            });
         }
     }
 
@@ -453,7 +495,7 @@
         const m = document.getElementById('monthlyBaseMonth').value;
         if(!m) return alert("請選擇月份");
         let grouped = {};
-        cloudLogs.filter(l => l.reportMonth === m).forEach(l => {
+        cloudLogs.filter(l => l.reportMonth && l.reportMonth.startsWith(m)).forEach(l => {
             if(!grouped[l.reporter]) grouped[l.reporter] = {};
             if(!grouped[l.reporter][l.category]) grouped[l.reporter][l.category] = [];
             grouped[l.reporter][l.category].push(l);
