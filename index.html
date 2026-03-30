@@ -273,7 +273,6 @@
                         <label>📂 專案類型篩選</label>
                         <div class="checkbox-group" id="filter-categories">
                             <label class="checkbox-label highlight"><input type="checkbox" id="checkAllCat" checked onchange="toggleAllCheckboxes('cat-check', 'checkAllCat')">全選</label>
-                            
                             <label class="checkbox-label"><input type="checkbox" class="cat-check" value="客戶專案" checked>客戶專案</label>
                             <label class="checkbox-label"><input type="checkbox" class="cat-check" value="補助計畫" checked>補助計畫</label>
                             <label class="checkbox-label"><input type="checkbox" class="cat-check" value="ISO專案" checked>ISO專案</label>
@@ -287,7 +286,6 @@
                         <label>🚦 狀態篩選</label>
                         <div class="checkbox-group" id="filter-statuses">
                             <label class="checkbox-label highlight"><input type="checkbox" id="checkAllStat" checked onchange="toggleAllCheckboxes('stat-check', 'checkAllStat')">全選</label>
-                            
                             <label class="checkbox-label"><input type="checkbox" class="stat-check" value="已完成" checked>✅ 已完成</label>
                             <label class="checkbox-label"><input type="checkbox" class="stat-check" value="進行中" checked>🏃 進行中</label>
                             <label class="checkbox-label" style="border-color:#fcd34d; background:#fef3c7; color:#92400e;"><input type="checkbox" class="stat-check" value="等待中" checked>⏸️ 等待中(風險)</label>
@@ -313,7 +311,7 @@
 
         <div class="card" id="reportArea" style="display: none;">
             <h2>📝 高階主管營運報告</h2>
-            <textarea id="monthlyOutput" style="width:100%; height:500px; margin-top:10px; font-family: 'Microsoft JhengHei', monospace; padding:15px; border-radius: 8px; font-size: 15px; line-height: 1.6;" placeholder="報表生成中..."></textarea>
+            <textarea id="monthlyOutput" style="width:100%; height:600px; margin-top:10px; font-family: 'Microsoft JhengHei', monospace; padding:20px; border-radius: 8px; font-size: 15px; line-height: 1.6;" placeholder="報表生成中..."></textarea>
             <button class="copy" onclick="copyMonthlyReport()">📋 複製完整報告 (可直接貼上至 Line/Email)</button>
         </div>
     </div>
@@ -327,7 +325,6 @@
     let cloudLogs = [];
     let currentFilter = 'thisWeek';
     
-    // 圖表實例
     let myPieChart = null;
     let myBarChart = null;
 
@@ -348,7 +345,6 @@
         }
     }
 
-    // --- 日期與工具邏輯 ---
     function handleDateStartChange() {
         const startVal = document.getElementById('dateStart').value;
         const endInput = document.getElementById('dateEnd');
@@ -383,7 +379,6 @@
         document.getElementById('reportMonth').value = tempDate.getFullYear() + "-" + String(tempDate.getMonth() + 1).padStart(2, '0');
     }
 
-    // --- 登入與介面切換 ---
     async function login() {
         const name = document.getElementById('loginName').value;
         const password = document.getElementById('loginPassword').value;
@@ -406,58 +401,60 @@
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('app-screen').style.display = 'block';
             
-            // 🌟 權限分流核心邏輯 🌟
             if (res.role === 'Admin') {
                 document.getElementById('employee-tabs').style.display = 'none';
                 document.getElementById('weekly-tab').style.display = 'none';
                 document.getElementById('monthly-tab').style.display = 'block';
                 
-                // 動態生成人員 Checkbox (加入全選按鈕)
                 let repHtml = `<label class="checkbox-label highlight"><input type="checkbox" id="checkAllRep" checked onchange="toggleAllCheckboxes('rep-check', 'checkAllRep')">全選</label>`;
                 ALL_REPORTERS.forEach(r => {
                     repHtml += `<label class="checkbox-label"><input type="checkbox" class="rep-check" value="${r}" checked>${r}</label>`;
                 });
                 document.getElementById('filter-reporters').innerHTML = repHtml;
                 
-                // 設定為本週
                 setShortcutDate('week');
-
             } else {
                 document.getElementById('dateStart').valueAsDate = new Date();
                 handleDateStartChange(); 
                 document.getElementById('monthly-tab').style.display = 'none';
             }
-
             loadLogs(false); 
         } else alert(res.message);
     }
 
-    // --- 戰情室專用：全選與日期快選邏輯 ---
     function toggleAllCheckboxes(className, masterId) {
         const isChecked = document.getElementById(masterId).checked;
         document.querySelectorAll('.' + className).forEach(cb => { cb.checked = isChecked; });
     }
 
+    // 🌟 日期快捷鍵邏輯修正：精準的時區與字串格式化 🌟
     function setShortcutDate(type) {
         const today = new Date();
+        const formatYMD = (date) => {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        };
+
         if (type === 'week') {
-            // 計算本週一到本週五(或週日) - 這裡以週一到週五為預設工作日
             const day = today.getDay();
             const diffToMonday = today.getDate() - day + (day === 0 ? -6 : 1);
-            const mon = new Date(today.setDate(diffToMonday));
+            const mon = new Date(today);
+            mon.setDate(diffToMonday);
             const fri = new Date(mon);
             fri.setDate(mon.getDate() + 4);
-            document.getElementById('reportStartDate').valueAsDate = mon;
-            document.getElementById('reportEndDate').valueAsDate = fri;
+            
+            document.getElementById('reportStartDate').value = formatYMD(mon);
+            document.getElementById('reportEndDate').value = formatYMD(fri);
         } else if (type === 'month') {
-            // 計算本月 1 號到本月底
+            // 抓取當月 1 號到當月底
             const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
             const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-            document.getElementById('reportStartDate').valueAsDate = firstDay;
-            document.getElementById('reportEndDate').valueAsDate = lastDay;
+            document.getElementById('reportStartDate').value = formatYMD(firstDay);
+            document.getElementById('reportEndDate').value = formatYMD(lastDay);
         }
     }
-    // ------------------------------------
 
     function logout() { location.reload(); }
 
@@ -506,7 +503,6 @@
         renderLogs(); 
     }
 
-    // --- 員工列表渲染 ---
     function renderLogs() {
         if(currentUser.role === 'Admin') return; 
         const tbody = document.getElementById('logTableBody');
@@ -579,7 +575,6 @@
         });
     }
 
-    // --- 員工新增與編輯邏輯 ---
     document.getElementById('logForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         autoCalcWeek();
@@ -714,20 +709,16 @@
 
     // 🔥🔥🔥 管理員核心：自動產出戰情圖表與神級週報 🔥🔥🔥
     function generateAdvancedReport() {
-        // 1. 取得篩選條件
         const dStart = document.getElementById('reportStartDate').value;
         const dEnd = document.getElementById('reportEndDate').value;
         
-        // 取得所有有被勾選的 class
         const selReps = Array.from(document.querySelectorAll('.rep-check:checked')).map(cb => cb.value);
         const selCats = Array.from(document.querySelectorAll('.cat-check:checked')).map(cb => cb.value);
         const selStats = Array.from(document.querySelectorAll('.stat-check:checked')).map(cb => cb.value);
 
         if (!dStart || !dEnd) { alert("請選擇結算日期的區間！"); return; }
 
-        // 2. 過濾資料
         const filteredData = cloudLogs.filter(log => {
-            // 日期區間過濾 (比對 note 欄位裡的日期)
             let logDate = "";
             if(log.note && log.note.includes('|')) logDate = log.note.split('|')[0];
             else if(log.note && log.note.includes('-')) logDate = log.note;
@@ -735,7 +726,6 @@
             let dateMatch = false;
             if (logDate) dateMatch = (logDate >= dStart && logDate <= dEnd);
 
-            // 人員、類型、狀態過濾
             const repMatch = selReps.includes(log.reporter);
             const cleanCat = (log.category || "").replace(/[💼📄📜📁💻💰📌]/g, '').trim();
             const catMatch = selCats.includes(cleanCat);
@@ -745,20 +735,12 @@
             return dateMatch && repMatch && catMatch && statMatch;
         });
 
-        // 3. 繪製圖表
         drawCharts(filteredData);
+        generateTextReport(filteredData, dStart, dEnd, selReps);
 
-        // 4. 產生文字報表
-        generateTextReport(filteredData, dStart, dEnd);
-
-        // 顯示區塊
         document.getElementById('chartArea').style.display = 'grid';
         document.getElementById('reportArea').style.display = 'block';
-        
-        // 平滑滾動
-        setTimeout(() => {
-            document.getElementById('chartArea').scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 100);
+        setTimeout(() => { document.getElementById('chartArea').scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
     }
 
     function extractField(contentStr, key) {
@@ -768,7 +750,16 @@
         return match ? match[1].trim() : '';
     }
 
-    function generateTextReport(data, dStart, dEnd) {
+    // 🌟 針對舊資料的強效洗淨邏輯：強迫斷行排版 🌟
+    function cleanOldContent(str) {
+        if (!str) return "無";
+        if (str.includes('【階段】') || str.includes('【工作內容】')) {
+            return str.replace(/(【.*?】)/g, '\n       $1').trim();
+        }
+        return str;
+    }
+
+    function generateTextReport(data, dStart, dEnd, selReps) {
         if (data.length === 0) {
             document.getElementById('monthlyOutput').value = "⚠️ 在此篩選條件下，沒有找到任何紀錄喔！";
             return;
@@ -791,61 +782,93 @@
         txt += `  - ⏸️ 等待中：${waitCount} (⚠️ 需關注)\n`;
         txt += `  - ⏳ 未開始：${todoCount}\n\n`;
 
+        // 🌟 核心：以「人」為分類依據依序渲染四大區塊 🌟
+        const reporters = [...new Set(data.map(d => d.reporter))].sort();
+
         // 二、重點成果
         txt += `二、【重點成果（本期產出）】🏆\n`;
-        const doneItems = data.filter(l => l.status.includes('已完成'));
-        if (doneItems.length === 0) txt += `  (本期無已完成項目)\n`;
-        doneItems.forEach((item, idx) => {
-            const cleanCat = item.category.replace(/[💼📄📜📁💻💰📌]/g, '').trim();
-            const task = extractField(item.content, '本週進度') || item.content.replace(/\n/g, ' ');
-            txt += `  ${idx+1}. [${cleanCat}] ${task} (${item.reporter})\n`;
+        let hasDone = false;
+        reporters.forEach(rep => {
+            const items = data.filter(d => d.reporter === rep && d.status.includes('已完成'));
+            if(items.length > 0) {
+                hasDone = true;
+                txt += `👤 ${rep}：\n`;
+                items.forEach((item, idx) => {
+                    const task = extractField(item.content, '本週進度') || cleanOldContent(item.content);
+                    const cleanCat = item.category.replace(/[💼📄📜📁💻💰📌]/g, '').trim();
+                    // 如果有斷行，把它縮排對齊
+                    const formattedTask = task.split('\n').join('\n       ').trim();
+                    txt += `  ${idx+1}. [${cleanCat}] ${formattedTask}\n`;
+                });
+                txt += `\n`;
+            }
         });
-        txt += `\n`;
+        if (!hasDone) txt += `  (本期無已完成項目)\n\n`;
 
         // 三、專案進度整理
         txt += `三、【專案進度整理】📈\n`;
-        const progressItems = data.filter(l => !l.status.includes('已完成'));
-        if (progressItems.length === 0) txt += `  (無進行中項目)\n`;
-        progressItems.forEach(item => {
-            const project = extractField(item.content, '專案名稱') || item.target || "未命名任務";
-            const phase = extractField(item.content, '目前階段') || "執行中";
-            const task = extractField(item.content, '本週進度') || item.content.replace(/\n/g, ' ');
-            const note = extractField(item.content, '備註');
-            
-            txt += `■ ${project} (${item.reporter})\n`;
-            txt += `  - 目前階段：${phase}\n`;
-            txt += `  - 本期進度：${task}\n`;
-            if (note) txt += `  - 備　　註：${note}\n`;
-            txt += `\n`;
+        let hasProgress = false;
+        reporters.forEach(rep => {
+            const items = data.filter(d => d.reporter === rep && !d.status.includes('已完成'));
+            if(items.length > 0) {
+                hasProgress = true;
+                txt += `👤 ${rep}：\n`;
+                items.forEach((item, idx) => {
+                    const project = extractField(item.content, '專案名稱') || item.target || "未命名任務";
+                    const phase = extractField(item.content, '目前階段') || "執行中";
+                    const task = extractField(item.content, '本週進度') || cleanOldContent(item.content);
+                    const note = extractField(item.content, '備註');
+                    
+                    txt += `  ${idx+1}. ${project}\n`;
+                    txt += `     - 目前階段：${phase}\n`;
+                    const formattedTask = task.split('\n').join('\n       ').trim();
+                    txt += `     - 本期進度：${formattedTask}\n`;
+                    if (note) txt += `     - 備　　註：${note.replace(/\n/g, ' ')}\n`;
+                });
+                txt += `\n`;
+            }
         });
+        if (!hasProgress) txt += `  (無進行中項目)\n\n`;
 
         // 四、卡關 / 風險
         txt += `四、【卡關 / 風險（需主管關注）】🚨\n`;
-        let riskIndex = 1;
-        data.forEach(item => {
-            const risk = extractField(item.content, '卡關風險');
-            const project = extractField(item.content, '專案名稱') || item.target || "未命名任務";
-            if (risk || item.status.includes('等待中')) {
-                const riskDesc = risk ? risk : "目前處於等待中狀態，需確認是否卡關。";
-                txt += `  ${riskIndex}. 🚨 [${project}]：${riskDesc} (${item.reporter})\n`;
-                riskIndex++;
+        let hasRisk = false;
+        reporters.forEach(rep => {
+            const items = data.filter(d => {
+                const risk = extractField(d.content, '卡關風險');
+                return d.reporter === rep && (risk || d.status.includes('等待中'));
+            });
+            if(items.length > 0) {
+                hasRisk = true;
+                txt += `👤 ${rep}：\n`;
+                items.forEach((item, idx) => {
+                    const project = extractField(item.content, '專案名稱') || item.target || "未命名任務";
+                    const risk = extractField(item.content, '卡關風險');
+                    const riskDesc = risk ? risk : "目前處於等待中狀態，需確認是否卡關。";
+                    txt += `  ${idx+1}. [${project}]：${riskDesc.replace(/\n/g, ' ')}\n`;
+                });
+                txt += `\n`;
             }
         });
-        if (riskIndex === 1) txt += `  (✅ 本期無卡關風險回報)\n`;
-        txt += `\n`;
+        if (!hasRisk) txt += `  (✅ 本期無卡關風險回報)\n\n`;
 
         // 五、下週執行重點
         txt += `五、【下週執行重點】⏭️\n`;
-        let nextIndex = 1;
-        progressItems.forEach(item => {
-            const next = extractField(item.content, '下週規劃');
-            const project = extractField(item.content, '專案名稱') || item.target || "未命名任務";
-            if (next) {
-                txt += `  ${nextIndex}. ${next} (${project} / ${item.reporter})\n`;
-                nextIndex++;
+        let hasNext = false;
+        reporters.forEach(rep => {
+            const items = data.filter(d => d.reporter === rep && !d.status.includes('已完成') && extractField(d.content, '下週規劃'));
+            if(items.length > 0) {
+                hasNext = true;
+                txt += `👤 ${rep}：\n`;
+                items.forEach((item, idx) => {
+                    const project = extractField(item.content, '專案名稱') || item.target || "未命名任務";
+                    const next = extractField(item.content, '下週規劃');
+                    txt += `  ${idx+1}. ${next.replace(/\n/g, ' ')} (${project})\n`;
+                });
+                txt += `\n`;
             }
         });
-        if (nextIndex === 1) txt += `  (無下週規劃)\n`;
+        if (!hasNext) txt += `  (無下週規劃)\n`;
 
         document.getElementById('monthlyOutput').value = txt;
     }
@@ -867,7 +890,7 @@
                 labels: Object.keys(catCounts),
                 datasets: [{
                     data: Object.values(catCounts),
-                    backgroundColor: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#64748b', '#14b8a6']
+                    backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#64748b', '#14b8a6']
                 }]
             },
             options: { plugins: { legend: { position: 'bottom' } } }
@@ -889,7 +912,7 @@
                 datasets: [{
                     label: '任務數量',
                     data: [done, doing, waiting, todo],
-                    backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#9ca3af'],
+                    backgroundColor: ['#10b981', '#6366f1', '#f59e0b', '#9ca3af'],
                     borderRadius: 5
                 }]
             },
