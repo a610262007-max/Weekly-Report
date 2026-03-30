@@ -188,9 +188,13 @@
                         <label>【下週行動規劃】 <span class="hint-text">(下週預計推進的進度？)</span></label>
                         <textarea id="content_next" rows="3" required placeholder="可按 Enter 換行..."></textarea>
                     </div>
-                    <div class="form-group" style="margin-bottom: 0;">
+                    <div class="form-group">
                         <label>【卡關與風險說明】🚨 <span class="hint-text">(遇到困難或需要支援？無則免填)</span></label>
                         <textarea id="content_risk" rows="2" placeholder="可按 Enter 換行..."></textarea>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label>【備註】 <span class="hint-text">(選填，雲端連結或補充說明)</span></label>
+                        <textarea id="content_note" rows="2" placeholder="可按 Enter 換行..."></textarea>
                     </div>
                 </div>
 
@@ -454,7 +458,6 @@
             const categoryText = (log.category || "其他").replace(/[💼📄📜📁💻💰📌]/g, '').trim();
             const contentStr = log.content || "";
             
-            // 將標籤加粗變色，若是「卡關風險」則標為醒目紅色
             let formattedContent = contentStr.replace(/(【.*?】)/g, '<strong style="color:var(--primary);">$1</strong>');
             formattedContent = formattedContent.replace(/<strong style="color:var\(--primary\);">【卡關風險】<\/strong>/g, '<strong style="color:#ef4444;">🚨【卡關風險】</strong>');
 
@@ -480,15 +483,16 @@
         const isEdit = editId !== "";
         const currentId = isEdit ? editId : "temp_" + new Date().getTime(); 
 
-        // 🔥 抓取全新的 5 格資料並組合成標準格式 🔥
         const project = document.getElementById('content_project').value.trim();
         const phase = document.getElementById('content_phase').value.trim();
         const task = document.getElementById('content_task').value.trim();
         const next = document.getElementById('content_next').value.trim();
         const risk = document.getElementById('content_risk').value.trim();
+        const noteObj = document.getElementById('content_note').value.trim();
         
         let contentStr = `【專案名稱】${project}\n【目前階段】${phase}\n【本週進度】${task}\n【下週規劃】${next}`;
         if (risk) contentStr += `\n【卡關風險】${risk}`;
+        if (noteObj) contentStr += `\n【備註】${noteObj}`;
 
         const logData = {
             id: isEdit ? editId : "", 
@@ -498,7 +502,7 @@
             category: document.getElementById('category').value,
             status: document.getElementById('status').value,
             content: contentStr, 
-            target: project, // 把第一格專案名稱寫入舊資料庫的 target 欄位，保持相容
+            target: project,
             note: document.getElementById('dateStart').value + '|' + document.getElementById('dateEnd').value 
         };
 
@@ -563,7 +567,6 @@
 
         const contentStr = log.content || "";
         
-        // 🔥 將雲端的字串拆回全新的 5 格 🔥
         if (contentStr.includes('【專案名稱】')) {
             const extract = (str, key) => {
                 const regex = new RegExp(`【${key}】([\\s\\S]*?)(?=\\n【|$)`);
@@ -575,13 +578,14 @@
             document.getElementById('content_task').value = extract(contentStr, '本週進度');
             document.getElementById('content_next').value = extract(contentStr, '下週規劃');
             document.getElementById('content_risk').value = extract(contentStr, '卡關風險');
+            document.getElementById('content_note').value = extract(contentStr, '備註');
         } else {
-            // 相容更舊的資料
             document.getElementById('content_project').value = log.target || "";
             document.getElementById('content_phase').value = "";
             document.getElementById('content_task').value = contentStr;
             document.getElementById('content_next').value = "";
             document.getElementById('content_risk').value = "";
+            document.getElementById('content_note').value = "";
         }
 
         document.getElementById('submitBtn').innerText = "🔄 更新這筆資料";
@@ -598,6 +602,7 @@
         document.getElementById('content_task').value = '';
         document.getElementById('content_next').value = '';
         document.getElementById('content_risk').value = '';
+        document.getElementById('content_note').value = '';
 
         document.getElementById('submitBtn').innerText = "💾 儲存並同步至雲端";
         document.getElementById('cancelBtn').style.display = "none";
