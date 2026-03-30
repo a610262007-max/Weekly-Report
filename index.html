@@ -41,7 +41,8 @@
         
         .form-group { margin-bottom: 15px; text-align: left; }
         label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 14px; }
-        input, select, textarea { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 5px; box-sizing: border-box; font-size: 15px; }
+        input, select, textarea { width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 5px; box-sizing: border-box; font-size: 15px; font-family: inherit; }
+        textarea { resize: vertical; } /* 允許垂直拉伸 */
         
         /* 專案級內容填寫區塊樣式 */
         .content-block { background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 15px; }
@@ -174,23 +175,23 @@
                     <label class="content-block-title">📝 專案級工作內容填寫</label>
                     <div class="form-group">
                         <label>【階段】 <span class="hint-text">(例如：盤查 / 訪視 / 提案)</span></label>
-                        <input type="text" id="content_phase" required>
+                        <textarea id="content_phase" rows="2" required placeholder="可按 Enter 換行..."></textarea>
                     </div>
                     <div class="form-group">
                         <label>【工作內容】 <span class="hint-text">(例如：能源使用數據整理)</span></label>
-                        <input type="text" id="content_task" required>
+                        <textarea id="content_task" rows="2" required placeholder="可按 Enter 換行..."></textarea>
                     </div>
                     <div class="form-group">
                         <label>【執行說明】 <span class="hint-text">(請具體描述執行細節)</span></label>
-                        <textarea id="content_desc" rows="2" required></textarea>
+                        <textarea id="content_desc" rows="3" required placeholder="可按 Enter 換行詳細說明..."></textarea>
                     </div>
                     <div class="form-group">
                         <label>【成果 / 進度】 <span class="hint-text">(例如：完成80%資料建檔)</span></label>
-                        <input type="text" id="content_result" required>
+                        <textarea id="content_result" rows="2" required placeholder="可按 Enter 換行..."></textarea>
                     </div>
                     <div class="form-group" style="margin-bottom: 0;">
                         <label>【備註】 <span class="hint-text">(選填)</span></label>
-                        <input type="text" id="content_note">
+                        <textarea id="content_note" rows="2" placeholder="可按 Enter 換行..."></textarea>
                     </div>
                 </div>
 
@@ -444,7 +445,6 @@
                  else statusText = '⏳ ' + statusText;
             }
 
-            // 🔥 讓表格內的 5 格格式漂亮顯示 (把【】標籤變色加粗) 🔥
             let formattedContent = log.content.replace(/(【.*?】)/g, '<strong style="color:var(--primary);">$1</strong>');
 
             tr.innerHTML = `
@@ -469,7 +469,6 @@
         const isEdit = editId !== "";
         const currentId = isEdit ? editId : "temp_" + new Date().getTime(); 
 
-        // 🔥 將 5 格輸入框合併為字串 🔥
         const phase = document.getElementById('content_phase').value.trim();
         const task = document.getElementById('content_task').value.trim();
         const desc = document.getElementById('content_desc').value.trim();
@@ -486,7 +485,7 @@
             reporter: document.getElementById('reporter').value,
             category: document.getElementById('category').value,
             status: document.getElementById('status').value,
-            content: contentStr, // 存入合併後的專業格式
+            content: contentStr, 
             target: document.getElementById('target').value,
             note: document.getElementById('dateStart').value + '|' + document.getElementById('dateEnd').value 
         };
@@ -544,7 +543,6 @@
              }
         }
 
-        // 🔥 解析雲端抓下來的格式，拆回 5 個格子裡 🔥
         if (log.content && log.content.includes('【階段】')) {
             const extract = (str, key) => {
                 const regex = new RegExp(`【${key}】([\\s\\S]*?)(?=\\n【|$)`);
@@ -557,7 +555,6 @@
             document.getElementById('content_result').value = extract(log.content, '成果/進度');
             document.getElementById('content_note').value = extract(log.content, '備註');
         } else {
-            // 如果是舊的資料，全部倒進「工作內容」這格
             document.getElementById('content_phase').value = '';
             document.getElementById('content_task').value = log.content || '';
             document.getElementById('content_desc').value = '';
@@ -575,7 +572,6 @@
         document.getElementById('logForm').reset();
         document.getElementById('editId').value = "";
         
-        // 清空 5 格內容
         document.getElementById('content_phase').value = '';
         document.getElementById('content_task').value = '';
         document.getElementById('content_desc').value = '';
@@ -648,7 +644,6 @@
                     const statusText = item.status.replace(/[⏳✅🏃⏸️]/g, '').trim();
                     const statusMark = statusText === '已完成' ? '' : `(${statusText})`;
 
-                    // 🔥 月報產生器，自動排版 5 格結構 🔥
                     const formattedContent = item.content.split('\n').map(line => `      ${line}`).join('\n');
                     txt += `    - (${displayDate}) ${statusMark}\n${formattedContent}\n`; 
                 });
