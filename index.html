@@ -73,7 +73,7 @@
         .status-doing { background: #dbeafe; color: #1e40af; }     
         .status-waiting { background: #fef3c7; color: #92400e; }   
         .status-todo { background: #f3f4f6; color: #4b5563; }      
-        .text-wrap { white-space: pre-wrap; word-break: break-all; line-height: 1.5; }
+        .text-wrap { white-space: pre-wrap; word-break: break-all; line-height: 1.6; }
 
         #loadingOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8); z-index: 9999; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; color: var(--primary); }
     </style>
@@ -129,7 +129,7 @@
 
     <div id="weekly-tab" class="tab-content active">
         <div class="card">
-            <h2 id="formTitle">✍️ 新增項目</h2>
+            <h2 id="formTitle">✍️ 新增專案進度</h2>
             <form id="logForm">
                 <input type="hidden" id="editId">
                 <div class="form-group">
@@ -171,33 +171,29 @@
                 </div>
 
                 <div class="content-block">
-                    <label class="content-block-title">📝 專案級工作內容填寫</label>
+                    <label class="content-block-title">📝 專案進度回報</label>
                     <div class="form-group">
-                        <label>【階段】 <span class="hint-text">(例如：盤查 / 訪視 / 提案)</span></label>
-                        <textarea id="content_phase" rows="2" required placeholder="可按 Enter 換行..."></textarea>
+                        <label>【專案 / 客戶名稱】 <span class="hint-text">(例如：SIIR計畫-SolarPet)</span></label>
+                        <input type="text" id="content_project" required>
                     </div>
                     <div class="form-group">
-                        <label>【工作內容】 <span class="hint-text">(例如：能源使用數據整理)</span></label>
-                        <textarea id="content_task" rows="2" required placeholder="可按 Enter 換行..."></textarea>
+                        <label>【目前所處階段】 <span class="hint-text">(例如：資料蒐集、初稿撰寫)</span></label>
+                        <input type="text" id="content_phase" required>
                     </div>
                     <div class="form-group">
-                        <label>【執行說明】 <span class="hint-text">(請具體描述執行細節)</span></label>
-                        <textarea id="content_desc" rows="3" required placeholder="可按 Enter 換行詳細說明..."></textarea>
+                        <label>【本週執行內容與成果】 <span class="hint-text">(本週實際完成了什麼？)</span></label>
+                        <textarea id="content_task" rows="3" required placeholder="可按 Enter 換行..."></textarea>
                     </div>
                     <div class="form-group">
-                        <label>【成果 / 進度】 <span class="hint-text">(例如：完成80%資料建檔)</span></label>
-                        <textarea id="content_result" rows="2" required placeholder="可按 Enter 換行..."></textarea>
+                        <label>【下週行動規劃】 <span class="hint-text">(下週預計推進的進度？)</span></label>
+                        <textarea id="content_next" rows="3" required placeholder="可按 Enter 換行..."></textarea>
                     </div>
                     <div class="form-group" style="margin-bottom: 0;">
-                        <label>【備註】 <span class="hint-text">(選填)</span></label>
-                        <textarea id="content_note" rows="2" placeholder="可按 Enter 換行..."></textarea>
+                        <label>【卡關與風險說明】🚨 <span class="hint-text">(遇到困難或需要支援？無則免填)</span></label>
+                        <textarea id="content_risk" rows="2" placeholder="可按 Enter 換行..."></textarea>
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label>關聯對象 <span class="hint-text">(客戶/專案/部門名稱)</span></label>
-                    <input type="text" id="target" placeholder="輸入關聯名稱...">
-                </div>
                 <button type="submit" id="submitBtn">💾 儲存並同步至雲端</button>
                 <button type="button" id="cancelBtn" onclick="cancelEdit()" style="display:none; background:#6b7280; color:white; width:100%; margin-top:5px;">❌ 取消修改</button>
             </form>
@@ -350,20 +346,15 @@
         const res = await callAPI('getLogs', { name: currentUser.name, role: currentUser.role }, silent);
         if (res.success) { 
             cloudLogs = res.data.map(log => {
-                
-                // 🔥 三重防呆：確保資料絕對帶有正確的 YYYY-MM 月份 🔥
-                // 1. 優先從 note (你選的日期) 取出年月
                 if (log.note && log.note.match(/^\d{4}-\d{2}-\d{2}/)) {
                     log.reportMonth = log.note.substring(0, 7);
                 } 
-                // 2. 如果沒有，看有沒有 Google Sheets 給的日期
                 else if (log.reportMonth && log.reportMonth.toString().includes('-')) {
                     let d = new Date(log.reportMonth);
                     if (!isNaN(d.getTime())) {
                         log.reportMonth = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, '0');
                     }
                 }
-                // 3. 如果連這個都沒有，那就從週次強行反推月份 (救援極舊資料)
                 else if (log.reportWeek && log.reportWeek.includes('-W')) {
                     const parts = log.reportWeek.split('-W');
                     const y = parseInt(parts[0]);
@@ -371,10 +362,7 @@
                     const d = new Date(y, 0, 1 + (w - 1) * 7);
                     log.reportMonth = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, '0');
                 }
-                
-                // 保底防呆，避免 undefined
                 if (!log.reportMonth) log.reportMonth = "";
-                
                 return log;
             });
             updateYearDropdown(); 
@@ -465,7 +453,10 @@
             
             const categoryText = (log.category || "其他").replace(/[💼📄📜📁💻💰📌]/g, '').trim();
             const contentStr = log.content || "";
+            
+            // 將標籤加粗變色，若是「卡關風險」則標為醒目紅色
             let formattedContent = contentStr.replace(/(【.*?】)/g, '<strong style="color:var(--primary);">$1</strong>');
+            formattedContent = formattedContent.replace(/<strong style="color:var\(--primary\);">【卡關風險】<\/strong>/g, '<strong style="color:#ef4444;">🚨【卡關風險】</strong>');
 
             tr.innerHTML = `
                 <td style="width: 120px;"><strong style="color:var(--primary); font-size:15px;">${displayDate}</strong><br><small style="color:#666">${log.reporter}</small></td>
@@ -489,14 +480,15 @@
         const isEdit = editId !== "";
         const currentId = isEdit ? editId : "temp_" + new Date().getTime(); 
 
+        // 🔥 抓取全新的 5 格資料並組合成標準格式 🔥
+        const project = document.getElementById('content_project').value.trim();
         const phase = document.getElementById('content_phase').value.trim();
         const task = document.getElementById('content_task').value.trim();
-        const desc = document.getElementById('content_desc').value.trim();
-        const resObj = document.getElementById('content_result').value.trim();
-        const noteObj = document.getElementById('content_note').value.trim();
+        const next = document.getElementById('content_next').value.trim();
+        const risk = document.getElementById('content_risk').value.trim();
         
-        let contentStr = `【階段】${phase}\n【工作內容】${task}\n【執行說明】${desc}\n【成果/進度】${resObj}`;
-        if (noteObj) contentStr += `\n【備註】${noteObj}`;
+        let contentStr = `【專案名稱】${project}\n【目前階段】${phase}\n【本週進度】${task}\n【下週規劃】${next}`;
+        if (risk) contentStr += `\n【卡關風險】${risk}`;
 
         const logData = {
             id: isEdit ? editId : "", 
@@ -506,7 +498,7 @@
             category: document.getElementById('category').value,
             status: document.getElementById('status').value,
             content: contentStr, 
-            target: document.getElementById('target').value,
+            target: project, // 把第一格專案名稱寫入舊資料庫的 target 欄位，保持相容
             note: document.getElementById('dateStart').value + '|' + document.getElementById('dateEnd').value 
         };
 
@@ -570,26 +562,28 @@
         }
 
         const contentStr = log.content || "";
-        if (contentStr.includes('【階段】')) {
+        
+        // 🔥 將雲端的字串拆回全新的 5 格 🔥
+        if (contentStr.includes('【專案名稱】')) {
             const extract = (str, key) => {
                 const regex = new RegExp(`【${key}】([\\s\\S]*?)(?=\\n【|$)`);
                 const match = str.match(regex);
                 return match ? match[1].trim() : '';
             };
-            document.getElementById('content_phase').value = extract(contentStr, '階段');
-            document.getElementById('content_task').value = extract(contentStr, '工作內容');
-            document.getElementById('content_desc').value = extract(contentStr, '執行說明');
-            document.getElementById('content_result').value = extract(contentStr, '成果/進度');
-            document.getElementById('content_note').value = extract(contentStr, '備註');
+            document.getElementById('content_project').value = extract(contentStr, '專案名稱');
+            document.getElementById('content_phase').value = extract(contentStr, '目前階段');
+            document.getElementById('content_task').value = extract(contentStr, '本週進度');
+            document.getElementById('content_next').value = extract(contentStr, '下週規劃');
+            document.getElementById('content_risk').value = extract(contentStr, '卡關風險');
         } else {
-            document.getElementById('content_phase').value = '';
+            // 相容更舊的資料
+            document.getElementById('content_project').value = log.target || "";
+            document.getElementById('content_phase').value = "";
             document.getElementById('content_task').value = contentStr;
-            document.getElementById('content_desc').value = '';
-            document.getElementById('content_result').value = '';
-            document.getElementById('content_note').value = '';
+            document.getElementById('content_next').value = "";
+            document.getElementById('content_risk').value = "";
         }
 
-        document.getElementById('target').value = log.target || "";
         document.getElementById('submitBtn').innerText = "🔄 更新這筆資料";
         document.getElementById('cancelBtn').style.display = "block";
         window.scrollTo({top:0, behavior:'smooth'});
@@ -599,11 +593,11 @@
         document.getElementById('logForm').reset();
         document.getElementById('editId').value = "";
         
+        document.getElementById('content_project').value = '';
         document.getElementById('content_phase').value = '';
         document.getElementById('content_task').value = '';
-        document.getElementById('content_desc').value = '';
-        document.getElementById('content_result').value = '';
-        document.getElementById('content_note').value = '';
+        document.getElementById('content_next').value = '';
+        document.getElementById('content_risk').value = '';
 
         document.getElementById('submitBtn').innerText = "💾 儲存並同步至雲端";
         document.getElementById('cancelBtn').style.display = "none";
