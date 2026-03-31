@@ -351,8 +351,43 @@
     
     let myPieChart = null;
     let myBarChart = null;
+    let idleTimer;
 
     const ALL_REPORTERS = ["Eddy", "Shaders", "Yang", "Nico", "Yueh", "Lidia"];
+
+    // 🌟 網頁載入時檢查是否已有登入的 Session 🌟
+    window.addEventListener('DOMContentLoaded', () => {
+        const savedUser = sessionStorage.getItem('teamReportUser');
+        if (savedUser) {
+            currentUser = JSON.parse(savedUser);
+            enterSystem(); // 直接進入系統，跳過密碼
+        }
+        
+        // 綁定活動偵測事件 (滑鼠移動、鍵盤、滾動)
+        ['mousemove', 'keydown', 'scroll', 'click'].forEach(evt => {
+            window.addEventListener(evt, resetIdleTimer);
+        });
+        
+        // 每分鐘檢查一次是否閒置過久
+        setInterval(checkIdleTime, 60000); 
+    });
+
+    // 🌟 閒置計時器邏輯 🌟
+    function resetIdleTimer() {
+        if (currentUser && currentUser.name) {
+            sessionStorage.setItem('lastActivity', Date.now());
+        }
+    }
+
+    function checkIdleTime() {
+        if (currentUser && currentUser.name) {
+            const lastAct = parseInt(sessionStorage.getItem('lastActivity') || Date.now());
+            if (Date.now() - lastAct > 10 * 60 * 1000) { // 10 分鐘沒動作
+                alert("已閒置超過 10 分鐘，為了保護公司資料安全，已為您自動登出！");
+                logout();
+            }
+        }
+    }
 
     function showLoading(show) { document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none'; }
 
@@ -419,31 +454,43 @@
 
         if (res.success) {
             currentUser = { name, role: res.role };
-            document.getElementById('displayUserName').innerText = name;
-            document.getElementById('displayUserRole').innerText = res.role === 'Admin' ? '管理員' : '一般員工';
-            document.getElementById('reporter').value = name;
-            document.getElementById('login-screen').style.display = 'none';
-            document.getElementById('app-screen').style.display = 'block';
             
-            if (res.role === 'Admin') {
-                document.getElementById('employee-tabs').style.display = 'none';
-                document.getElementById('weekly-tab').style.display = 'none';
-                document.getElementById('monthly-tab').style.display = 'block';
-                
-                let repHtml = `<label class="checkbox-label highlight"><input type="checkbox" id="checkAllRep" checked onchange="toggleAllCheckboxes('rep-check', 'checkAllRep')">全選</label>`;
-                ALL_REPORTERS.forEach(r => {
-                    repHtml += `<label class="checkbox-label"><input type="checkbox" class="rep-check" value="${r}" checked>${r}</label>`;
-                });
-                document.getElementById('filter-reporters').innerHTML = repHtml;
-                
-                setShortcutDate('week');
-            } else {
-                document.getElementById('dateStart').valueAsDate = new Date();
-                handleDateStartChange(); 
-                document.getElementById('monthly-tab').style.display = 'none';
-            }
-            loadLogs(false); 
-        } else alert(res.message);
+            // 🌟 登入成功，將身分與活動時間存入 sessionStorage 🌟
+            sessionStorage.setItem('teamReportUser', JSON.stringify(currentUser));
+            sessionStorage.setItem('lastActivity', Date.now());
+            
+            enterSystem();
+        } else {
+            alert(res.message);
+        }
+    }
+
+    // 將 UI 切換邏輯獨立出來，讓自動登入也能使用
+    function enterSystem() {
+        document.getElementById('displayUserName').innerText = currentUser.name;
+        document.getElementById('displayUserRole').innerText = currentUser.role === 'Admin' ? '管理員' : '一般員工';
+        document.getElementById('reporter').value = currentUser.name;
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('app-screen').style.display = 'block';
+        
+        if (currentUser.role === 'Admin') {
+            document.getElementById('employee-tabs').style.display = 'none';
+            document.getElementById('weekly-tab').style.display = 'none';
+            document.getElementById('monthly-tab').style.display = 'block';
+            
+            let repHtml = `<label class="checkbox-label highlight"><input type="checkbox" id="checkAllRep" checked onchange="toggleAllCheckboxes('rep-check', 'checkAllRep')">全選</label>`;
+            ALL_REPORTERS.forEach(r => {
+                repHtml += `<label class="checkbox-label"><input type="checkbox" class="rep-check" value="${r}" checked>${r}</label>`;
+            });
+            document.getElementById('filter-reporters').innerHTML = repHtml;
+            
+            setShortcutDate('week');
+        } else {
+            document.getElementById('dateStart').valueAsDate = new Date();
+            handleDateStartChange(); 
+            document.getElementById('monthly-tab').style.display = 'none';
+        }
+        loadLogs(false); 
     }
 
     function toggleAllCheckboxes(className, masterId) {
@@ -478,7 +525,11 @@
         }
     }
 
-    function logout() { location.reload(); }
+    function logout() { 
+        sessionStorage.removeItem('teamReportUser');
+        sessionStorage.removeItem('lastActivity');
+        location.reload(); 
+    }
 
     async function promptChangePassword() {
         const oldPw = prompt("請輸入【舊】密碼：");
@@ -728,12 +779,11 @@
         }
     }
 
-    // 🚀 新增功能：點擊後觸發生成 Google Slides 的邏輯準備區
     function exportToSlides() {
         alert("🚀 準備串接 Google Slides 生成功能！\n\n系統即將進入後端黑魔法階段。這顆按鈕未來會呼叫您的 Google Apps Script，將畫面上預覽無誤的內容與圖表，一鍵灌入您的空白簡報範本中！");
-        // 下一階段我們將在這裡呼叫 callAPI('generateSlides', {...})
     }
 
+    // 🔥 解決圖表當機：先顯示容器，再畫圖表 🔥
     function generateAdvancedReport() {
         const dStart = document.getElementById('reportStartDate').value;
         const dEnd = document.getElementById('reportEndDate').value;
@@ -761,14 +811,14 @@
             return dateMatch && repMatch && catMatch && statMatch;
         });
 
-        drawCharts(filteredData);
-        generateRichTextReport(filteredData, dStart, dEnd, selReps);
-
+        // 💡 關鍵修復：必須先將隱藏的容器 display: grid / block 打開，Chart.js 才能抓到正確的畫布大小！
         document.getElementById('chartArea').style.display = 'grid';
         document.getElementById('reportArea').style.display = 'block';
-        
-        // 🚀 解鎖匯出按鈕 🚀
         document.getElementById('btnExportSlides').disabled = false;
+
+        // 然後再呼叫繪圖和文字生成
+        drawCharts(filteredData);
+        generateRichTextReport(filteredData, dStart, dEnd, selReps);
 
         setTimeout(() => { document.getElementById('chartArea').scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
     }
