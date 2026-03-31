@@ -351,7 +351,6 @@
     
     let myPieChart = null;
     let myBarChart = null;
-    let idleTimer;
 
     const ALL_REPORTERS = ["Eddy", "Shaders", "Yang", "Nico", "Yueh", "Lidia"];
 
@@ -383,7 +382,7 @@
         if (currentUser && currentUser.name) {
             const lastAct = parseInt(sessionStorage.getItem('lastActivity') || Date.now());
             if (Date.now() - lastAct > 10 * 60 * 1000) { // 10 分鐘沒動作
-                alert("已閒置超過 10 分鐘，為了保護公司資料安全，已為您自動登出！");
+                alert("已閒置超過 10 分鐘，為了保護資料安全，系統已自動為您登出！");
                 logout();
             }
         }
@@ -599,8 +598,8 @@
         });
         
         document.getElementById('totalCount').innerText = filtered.length;
-        document.getElementById('countDone').innerText = filtered.filter(l=>l.status==='已完成').length;
-        document.getElementById('countTodo').innerText = filtered.filter(l=>l.status!=='已完成').length;
+        document.getElementById('countDone').innerText = filtered.filter(l=>(l.status||"").includes('已完成')).length;
+        document.getElementById('countTodo').innerText = filtered.filter(l=>!(l.status||"").includes('已完成')).length;
 
         filtered.sort((a,b) => {
             const dateA = a.note ? a.note.split('|')[0] : a.reportWeek;
@@ -609,9 +608,10 @@
         }).forEach(log => {
             const tr = document.createElement('tr');
             let statusClass = 'status-todo';
-            if (log.status === '已完成') statusClass = 'status-done';
-            else if (log.status === '進行中') statusClass = 'status-doing';
-            else if (log.status === '等待中') statusClass = 'status-waiting';
+            let statVal = log.status || "";
+            if (statVal.includes('已完成')) statusClass = 'status-done';
+            else if (statVal.includes('進行中')) statusClass = 'status-doing';
+            else if (statVal.includes('等待中')) statusClass = 'status-waiting';
             
             let displayDate = log.reportWeek;
             if (log.note) {
@@ -783,7 +783,7 @@
         alert("🚀 準備串接 Google Slides 生成功能！\n\n系統即將進入後端黑魔法階段。這顆按鈕未來會呼叫您的 Google Apps Script，將畫面上預覽無誤的內容與圖表，一鍵灌入您的空白簡報範本中！");
     }
 
-    // 🔥 解決圖表當機：先顯示容器，再畫圖表 🔥
+    // 🔥 解決圖表當機：先打開區塊顯示，讓畫布有尺寸，再執行畫圖與渲染！ 🔥
     function generateAdvancedReport() {
         const dStart = document.getElementById('reportStartDate').value;
         const dEnd = document.getElementById('reportEndDate').value;
@@ -811,16 +811,17 @@
             return dateMatch && repMatch && catMatch && statMatch;
         });
 
-        // 💡 關鍵修復：必須先將隱藏的容器 display: grid / block 打開，Chart.js 才能抓到正確的畫布大小！
+        // 💡 關鍵修復：必須先顯示區塊，Chart.js 才能抓到正確的 Canvas 尺寸！
         document.getElementById('chartArea').style.display = 'grid';
         document.getElementById('reportArea').style.display = 'block';
         document.getElementById('btnExportSlides').disabled = false;
 
-        // 然後再呼叫繪圖和文字生成
-        drawCharts(filteredData);
-        generateRichTextReport(filteredData, dStart, dEnd, selReps);
-
-        setTimeout(() => { document.getElementById('chartArea').scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
+        // 確保 DOM 渲染完畢後再畫圖
+        setTimeout(() => {
+            drawCharts(filteredData);
+            generateRichTextReport(filteredData, dStart, dEnd, selReps);
+            document.getElementById('chartArea').scrollIntoView({ behavior: 'smooth', block: 'start' }); 
+        }, 50);
     }
 
     function extractField(contentStr, key) {
@@ -854,10 +855,10 @@
         let html = ``;
         html += `<div style="font-size: 1.15em; font-weight: bold; margin-bottom: 15px; color: #1f2937;">📊 【${dStart} ~ ${dEnd} 營運戰情彙整】</div>`;
 
-        const doneCount = data.filter(l => l.status.includes('已完成')).length;
-        const doingCount = data.filter(l => l.status.includes('進行中')).length;
-        const waitCount = data.filter(l => l.status.includes('等待中')).length;
-        const todoCount = data.filter(l => l.status.includes('未開始')).length;
+        const doneCount = data.filter(l => (l.status||"").includes('已完成')).length;
+        const doingCount = data.filter(l => (l.status||"").includes('進行中')).length;
+        const waitCount = data.filter(l => (l.status||"").includes('等待中')).length;
+        const todoCount = data.filter(l => (l.status||"").includes('未開始')).length;
         const donePercent = data.length > 0 ? Math.round((doneCount / data.length) * 100) : 0;
 
         html += `<div style="font-size: 1.15em; font-weight: bold; margin-top: 25px; margin-bottom: 5px; color: #1f2937;">一、【整體摘要】</div>`;
@@ -875,13 +876,13 @@
         html += `<div style="font-size: 1.15em; font-weight: bold; margin-top: 25px; margin-bottom: 5px; color: #1f2937;">二、【重點成果（本期產出）】🏆</div>`;
         let hasDone = false;
         reporters.forEach(rep => {
-            const items = data.filter(d => d.reporter === rep && d.status.includes('已完成'));
+            const items = data.filter(d => d.reporter === rep && (d.status||"").includes('已完成'));
             if(items.length > 0) {
                 hasDone = true;
                 html += `<div style="font-weight: bold; margin-top: 12px; margin-bottom: 4px; color: #4338ca;">👤 ${rep}：</div>`;
                 items.forEach((item, idx) => {
-                    const task = extractField(item.content, '本週進度') || cleanOldContentToHTML(item.content);
-                    const cleanCat = item.category.replace(/[💼📄📜📁💻💰📌]/g, '').trim();
+                    const task = extractField(item.content||"", '本週進度') || cleanOldContentToHTML(item.content||"");
+                    const cleanCat = (item.category||"").replace(/[💼📄📜📁💻💰📌]/g, '').trim();
                     html += `<div style="margin-left: 15px;">${idx+1}. [${cleanCat}] ${formatContentToHTML(task)}</div>`;
                 });
             }
@@ -891,15 +892,15 @@
         html += `<div style="font-size: 1.15em; font-weight: bold; margin-top: 30px; margin-bottom: 5px; color: #1f2937;">三、【專案進度整理】📈</div>`;
         let hasProgress = false;
         reporters.forEach(rep => {
-            const items = data.filter(d => d.reporter === rep && !d.status.includes('已完成'));
+            const items = data.filter(d => d.reporter === rep && !(d.status||"").includes('已完成'));
             if(items.length > 0) {
                 hasProgress = true;
                 html += `<div style="font-weight: bold; margin-top: 15px; margin-bottom: 6px; color: #4338ca;">👤 ${rep}：</div>`;
                 items.forEach((item, idx) => {
-                    const project = extractField(item.content, '專案名稱') || item.target || "未命名任務";
-                    const phase = extractField(item.content, '目前階段') || "執行中";
-                    const task = extractField(item.content, '本週進度') || cleanOldContentToHTML(item.content);
-                    const note = extractField(item.content, '備註');
+                    const project = extractField(item.content||"", '專案名稱') || item.target || "未命名任務";
+                    const phase = extractField(item.content||"", '目前階段') || "執行中";
+                    const task = extractField(item.content||"", '本週進度') || cleanOldContentToHTML(item.content||"");
+                    const note = extractField(item.content||"", '備註');
                     
                     html += `<div style="margin-left: 15px; margin-bottom: 12px;">`;
                     html += `  <div>${idx+1}. <b>${project}</b></div>`;
@@ -916,15 +917,15 @@
         let hasRisk = false;
         reporters.forEach(rep => {
             const items = data.filter(d => {
-                const risk = extractField(d.content, '卡關風險');
-                return d.reporter === rep && (risk || d.status.includes('等待中'));
+                const risk = extractField(d.content||"", '卡關風險');
+                return d.reporter === rep && (risk || (d.status||"").includes('等待中'));
             });
             if(items.length > 0) {
                 hasRisk = true;
                 html += `<div style="font-weight: bold; margin-top: 12px; margin-bottom: 4px; color: #dc2626;">👤 ${rep}：</div>`;
                 items.forEach((item, idx) => {
-                    const project = extractField(item.content, '專案名稱') || item.target || "未命名任務";
-                    const risk = extractField(item.content, '卡關風險');
+                    const project = extractField(item.content||"", '專案名稱') || item.target || "未命名任務";
+                    const risk = extractField(item.content||"", '卡關風險');
                     const riskDesc = risk ? risk : "目前處於等待中狀態，需確認是否卡關。";
                     html += `<div style="margin-left: 15px; margin-bottom: 6px;">${idx+1}. [<b>${project}</b>]：${formatContentToHTML(riskDesc)}</div>`;
                 });
@@ -935,13 +936,13 @@
         html += `<div style="font-size: 1.15em; font-weight: bold; margin-top: 30px; margin-bottom: 5px; color: #1f2937;">五、【下週執行重點】⏭️</div>`;
         let hasNext = false;
         reporters.forEach(rep => {
-            const items = data.filter(d => d.reporter === rep && !d.status.includes('已完成') && extractField(d.content, '下週規劃'));
+            const items = data.filter(d => d.reporter === rep && !(d.status||"").includes('已完成') && extractField(d.content||"", '下週規劃'));
             if(items.length > 0) {
                 hasNext = true;
                 html += `<div style="font-weight: bold; margin-top: 12px; margin-bottom: 4px; color: #4338ca;">👤 ${rep}：</div>`;
                 items.forEach((item, idx) => {
-                    const project = extractField(item.content, '專案名稱') || item.target || "未命名任務";
-                    const next = extractField(item.content, '下週規劃');
+                    const project = extractField(item.content||"", '專案名稱') || item.target || "未命名任務";
+                    const next = extractField(item.content||"", '下週規劃');
                     html += `<div style="margin-left: 15px; margin-bottom: 4px;">${idx+1}. ${formatContentToHTML(next)} (<b>${project}</b>)</div>`;
                 });
             }
@@ -949,6 +950,57 @@
         if (!hasNext) html += `<div style="margin-left: 15px; color: #6b7280;">(無下週規劃)</div>`;
 
         out.innerHTML = html;
+    }
+
+    function drawCharts(data) {
+        if(myPieChart) myPieChart.destroy();
+        if(myBarChart) myBarChart.destroy();
+
+        const catCounts = {};
+        data.forEach(d => {
+            const c = (d.category||"").replace(/[💼📄📜📁💻💰📌]/g, '').trim() || "其他";
+            catCounts[c] = (catCounts[c] || 0) + 1;
+        });
+        
+        const pieCtx = document.getElementById('pieChart').getContext('2d');
+        myPieChart = new Chart(pieCtx, {
+            type: 'pie',
+            data: {
+                labels: Object.keys(catCounts),
+                datasets: [{
+                    data: Object.values(catCounts),
+                    backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#64748b', '#14b8a6']
+                }]
+            },
+            options: { plugins: { legend: { position: 'bottom' } } }
+        });
+
+        let done=0, doing=0, waiting=0, todo=0;
+        data.forEach(d => {
+            const stat = d.status || "";
+            if(stat.includes('已完成')) done++;
+            else if(stat.includes('進行中')) doing++;
+            else if(stat.includes('等待中')) waiting++;
+            else todo++;
+        });
+
+        const barCtx = document.getElementById('barChart').getContext('2d');
+        myBarChart = new Chart(barCtx, {
+            type: 'bar',
+            data: {
+                labels: ['✅ 已完成', '🏃 進行中', '⏸️ 等待中(風險)', '⏳ 未開始'],
+                datasets: [{
+                    label: '任務數量',
+                    data: [done, doing, waiting, todo],
+                    backgroundColor: ['#10b981', '#6366f1', '#f59e0b', '#9ca3af'],
+                    borderRadius: 5
+                }]
+            },
+            options: {
+                scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } },
+                plugins: { legend: { display: false } }
+            }
+        });
     }
 
     function copyMonthlyReport() {
