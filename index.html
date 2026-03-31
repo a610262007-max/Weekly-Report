@@ -325,8 +325,8 @@
 </div>
 
 <script>
-    // ⚠️⚠️⚠️ 記得在這裡貼上你的 API 網址！ ⚠️⚠️⚠️
-    const API_URL = "https://script.google.com/macros/s/AKfycbyJswRobrbS5wEznlXjBTUguOR-ZbUuJq1IF1ruomiHnokwyMBfYMhCX0o1Tmlfg0ck/exec";
+    // ⚠️⚠️⚠️ 請在這裡貼上你「最新部署」的 API 網址 ⚠️⚠️⚠️
+    const API_URL = "請把這段中文字換成你的_API_網址";
 
     let currentUser = { name: "", role: "" };
     let cloudLogs = [];
@@ -368,6 +368,7 @@
 
     function showLoading(show) { document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none'; }
 
+    // 🚀 強力除錯版 API 呼叫函數 🚀
     async function callAPI(action, params, silent = false) {
         if (!silent) showLoading(true);
         try {
@@ -376,8 +377,9 @@
             if (!silent) showLoading(false);
             return data;
         } catch (e) { 
-            if (!silent) { showLoading(false); alert("連線失敗！請確認網址。"); }
-            return { success: false }; 
+            if (!silent) showLoading(false); 
+            // 讓錯誤無所遁形
+            return { success: false, message: "網路連線阻擋或部署設定錯誤！(" + e.message + ")" }; 
         }
     }
 
@@ -435,7 +437,7 @@
             sessionStorage.setItem('lastActivity', Date.now());
             enterSystem();
         } else {
-            alert(res.message);
+            alert("登入失敗: " + res.message);
         }
     }
 
@@ -972,6 +974,7 @@
         });
     }
 
+    // 🚀 加了終極除錯雷達的匯出簡報功能 🚀
     async function exportToSlides() {
         if (currentFilteredData.length === 0) {
             alert("沒有資料可以匯出喔！");
@@ -1019,27 +1022,37 @@
                 nextTxt: nextTxt
             });
 
-            if (res.success) results.push(res);
+            // 💡 超強除錯雷達：如果失敗就大聲說出來 💡
+            if (res.success) {
+                results.push(res);
+            } else {
+                alert(`❌ 生成 ${name} 的簡報失敗！\n\n後端回傳原因：\n${res.message}\n\n請檢查 Google Apps Script 內的 ID 是否正確或權限是否有開啟。`);
+            }
         }
 
-        btn.innerText = "✅ 全員簡報匯出完成！";
-        btn.style.background = "#10b981";
-        
-        let linkListHtml = `<div id="slides-links" style="margin-bottom:20px; padding:15px; background:#f0fdf4; border-radius:8px; border:1px solid #bbf7d0;">`;
-        linkListHtml += `<h3 style="margin-top:0; color:#166534; font-size:18px;">🎉 ${results.length} 份個人簡報生成完畢：</h3>`;
-        results.forEach(r => {
-            linkListHtml += `<div style="margin-bottom:10px; font-size:16px;">👤 ${r.name}：<a href="${r.url}" target="_blank" style="color:#2563eb; font-weight:bold; text-decoration:underline;">點擊開啟簡報</a></div>`;
-        });
-        linkListHtml += `</div>`;
-        
-        const outArea = document.getElementById('monthlyOutput');
-        const oldLinks = document.getElementById('slides-links');
-        if(oldLinks) oldLinks.remove();
-        
-        outArea.innerHTML = linkListHtml + outArea.innerHTML;
-        outArea.scrollTop = 0; 
-        
-        alert(`太棒了！已成功生成 ${results.length} 份個人報告。\n連結已放在下方預覽區的最頂端。`);
+        if (results.length > 0) {
+            btn.innerText = `✅ 成功匯出 ${results.length} 份簡報！`;
+            btn.style.background = "#10b981";
+            
+            let linkListHtml = `<div id="slides-links" style="margin-bottom:20px; padding:15px; background:#f0fdf4; border-radius:8px; border:1px solid #bbf7d0;">`;
+            linkListHtml += `<h3 style="margin-top:0; color:#166534; font-size:18px;">🎉 ${results.length} 份個人簡報生成完畢：</h3>`;
+            results.forEach(r => {
+                linkListHtml += `<div style="margin-bottom:10px; font-size:16px;">👤 ${r.name}：<a href="${r.url}" target="_blank" style="color:#2563eb; font-weight:bold; text-decoration:underline;">點擊開啟簡報</a></div>`;
+            });
+            linkListHtml += `</div>`;
+            
+            const outArea = document.getElementById('monthlyOutput');
+            const oldLinks = document.getElementById('slides-links');
+            if(oldLinks) oldLinks.remove();
+            
+            outArea.innerHTML = linkListHtml + outArea.innerHTML;
+            outArea.scrollTop = 0; 
+            
+            alert(`太棒了！已成功生成 ${results.length} 份報告。\n連結已放在下方預覽區的最頂端。`);
+        } else {
+            btn.innerText = "❌ 匯出全數失敗";
+            btn.style.background = "#ef4444";
+        }
         
         setTimeout(() => {
             btn.disabled = false;
